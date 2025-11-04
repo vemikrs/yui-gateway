@@ -32,6 +32,11 @@ fi
 echo "✅ In project root directory"
 echo ""
 
+# Set PYTHONPATH to include project root
+export PYTHONPATH="${PWD}:${PYTHONPATH}"
+echo "PYTHONPATH set to: ${PYTHONPATH}"
+echo ""
+
 # Run tests with coverage
 echo "Running tests with coverage..."
 echo "================================"

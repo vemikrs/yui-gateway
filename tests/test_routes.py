@@ -4,7 +4,7 @@ Tests FastAPI endpoints and request/response handling.
 """
 
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 import httpx
 
@@ -63,7 +63,11 @@ class TestChatCompletionsEndpoint:
     
     def test_chat_completions_success(self, client, sample_chat_request, sample_chat_response):
         """Test successful chat completion request"""
-        with patch("gateway.routes.proxy.chat_completion") as mock_chat:
+        with patch("gateway.routes.azure_proxy.get_proxy") as mock_get_proxy:
+            mock_proxy = MagicMock()
+            mock_proxy.chat_completion = AsyncMock()
+            mock_get_proxy.return_value = mock_proxy
+            mock_chat = mock_proxy.chat_completion
             mock_chat.return_value = sample_chat_response
             
             response = client.post("/v1/chat/completions", json=sample_chat_request)
@@ -93,7 +97,11 @@ class TestChatCompletionsEndpoint:
             "n": 1
         }
         
-        with patch("gateway.routes.proxy.chat_completion") as mock_chat:
+        with patch("gateway.routes.azure_proxy.get_proxy") as mock_get_proxy:
+            mock_proxy = MagicMock()
+            mock_proxy.chat_completion = AsyncMock()
+            mock_get_proxy.return_value = mock_proxy
+            mock_chat = mock_proxy.chat_completion
             mock_chat.return_value = sample_chat_response
             
             response = client.post("/v1/chat/completions", json=request_data)
@@ -141,7 +149,11 @@ class TestChatCompletionsEndpoint:
     
     def test_chat_completions_proxy_error(self, client, sample_chat_request):
         """Test handling of proxy errors"""
-        with patch("gateway.routes.proxy.chat_completion") as mock_chat:
+        with patch("gateway.routes.azure_proxy.get_proxy") as mock_get_proxy:
+            mock_proxy = MagicMock()
+            mock_proxy.chat_completion = AsyncMock()
+            mock_get_proxy.return_value = mock_proxy
+            mock_chat = mock_proxy.chat_completion
             mock_chat.side_effect = Exception("Azure OpenAI service unavailable")
             
             response = client.post("/v1/chat/completions", json=sample_chat_request)
@@ -160,7 +172,11 @@ class TestChatCompletionsEndpoint:
             "temperature": 0.7   # Should be included
         }
         
-        with patch("gateway.routes.proxy.chat_completion") as mock_chat:
+        with patch("gateway.routes.azure_proxy.get_proxy") as mock_get_proxy:
+            mock_proxy = MagicMock()
+            mock_proxy.chat_completion = AsyncMock()
+            mock_get_proxy.return_value = mock_proxy
+            mock_chat = mock_proxy.chat_completion
             mock_chat.return_value = sample_chat_response
             
             response = client.post("/v1/chat/completions", json=request_with_none)
@@ -178,7 +194,11 @@ class TestChatCompletionsEndpoint:
         # Streaming support is a future enhancement
         stream_request = {**sample_chat_request, "stream": True}
         
-        with patch("gateway.routes.proxy.chat_completion") as mock_chat:
+        with patch("gateway.routes.azure_proxy.get_proxy") as mock_get_proxy:
+            mock_proxy = MagicMock()
+            mock_proxy.chat_completion = AsyncMock()
+            mock_get_proxy.return_value = mock_proxy
+            mock_chat = mock_proxy.chat_completion
             # For now, stream parameter is passed through
             mock_chat.return_value = {"choices": []}
             
@@ -199,7 +219,11 @@ class TestChatCompletionsEndpoint:
             ]
         }
         
-        with patch("gateway.routes.proxy.chat_completion") as mock_chat:
+        with patch("gateway.routes.azure_proxy.get_proxy") as mock_get_proxy:
+            mock_proxy = MagicMock()
+            mock_proxy.chat_completion = AsyncMock()
+            mock_get_proxy.return_value = mock_proxy
+            mock_chat = mock_proxy.chat_completion
             mock_chat.return_value = sample_chat_response
             
             response = client.post("/v1/chat/completions", json=multi_message_request)
@@ -212,7 +236,11 @@ class TestChatCompletionsEndpoint:
     
     def test_chat_completions_returns_json(self, client, sample_chat_request, sample_chat_response):
         """Test that chat completions endpoint returns JSON"""
-        with patch("gateway.routes.proxy.chat_completion") as mock_chat:
+        with patch("gateway.routes.azure_proxy.get_proxy") as mock_get_proxy:
+            mock_proxy = MagicMock()
+            mock_proxy.chat_completion = AsyncMock()
+            mock_get_proxy.return_value = mock_proxy
+            mock_chat = mock_proxy.chat_completion
             mock_chat.return_value = sample_chat_response
             
             response = client.post("/v1/chat/completions", json=sample_chat_request)
@@ -226,12 +254,16 @@ class TestApplicationLifecycle:
     @pytest.mark.asyncio
     async def test_shutdown_closes_proxy(self):
         """Test that shutdown event closes the proxy"""
-        with patch("gateway.routes.proxy.close") as mock_close:
+        with patch("gateway.routes.azure_proxy.get_proxy") as mock_get_proxy:
+            mock_proxy = MagicMock()
+            mock_proxy.close = AsyncMock()
+            mock_get_proxy.return_value = mock_proxy
+            
             from gateway.routes import shutdown_event
             
             await shutdown_event()
             
-            mock_close.assert_called_once()
+            mock_proxy.close.assert_called_once()
 
 
 class TestMessageModel:

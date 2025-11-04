@@ -29,15 +29,18 @@ class TestAzureOpenAIProxy:
         self, mock_settings, mock_token, sample_chat_request, sample_chat_response
     ):
         """Test successful chat completion request"""
-        with patch("gateway.azure_proxy.authenticator.get_token") as mock_get_token:
-            mock_get_token.return_value = mock_token
+        with patch("gateway.azure_proxy.auth.get_authenticator") as mock_get_auth:
+            mock_authenticator = MagicMock()
+            mock_authenticator.get_token.return_value = mock_token
+            mock_get_auth.return_value = mock_authenticator
             
             with patch("gateway.azure_proxy.httpx.AsyncClient") as mock_client_class:
                 mock_client = AsyncMock()
-                mock_response = AsyncMock()
+                mock_response = Mock()
                 mock_response.json.return_value = sample_chat_response
                 mock_response.raise_for_status = Mock()
-                mock_client.post.return_value = mock_response
+                mock_response.status_code = 200
+                mock_client.post = AsyncMock(return_value=mock_response)
                 mock_client_class.return_value = mock_client
                 
                 from gateway.azure_proxy import AzureOpenAIProxy
@@ -49,7 +52,7 @@ class TestAzureOpenAIProxy:
                 assert result == sample_chat_response
                 
                 # Verify token was obtained
-                mock_get_token.assert_called_once()
+                mock_get_auth.assert_called_once()
                 
                 # Verify request was made with correct parameters
                 mock_client.post.assert_called_once()
@@ -82,15 +85,18 @@ class TestAzureOpenAIProxy:
             "messages": [{"role": "user", "content": "Test"}]
         }
         
-        with patch("gateway.azure_proxy.authenticator.get_token") as mock_get_token:
-            mock_get_token.return_value = mock_token
+        with patch("gateway.azure_proxy.auth.get_authenticator") as mock_get_auth:
+            mock_authenticator = MagicMock()
+            mock_authenticator.get_token.return_value = mock_token
+            mock_get_auth.return_value = mock_authenticator
             
             with patch("gateway.azure_proxy.httpx.AsyncClient") as mock_client_class:
                 mock_client = AsyncMock()
-                mock_response = AsyncMock()
+                mock_response = Mock()
                 mock_response.json.return_value = sample_chat_response
                 mock_response.raise_for_status = Mock()
-                mock_client.post.return_value = mock_response
+                mock_response.status_code = 200
+                mock_client.post = AsyncMock(return_value=mock_response)
                 mock_client_class.return_value = mock_client
                 
                 from gateway.azure_proxy import AzureOpenAIProxy
@@ -108,12 +114,14 @@ class TestAzureOpenAIProxy:
         self, mock_settings, mock_token, sample_chat_request
     ):
         """Test handling of HTTP errors from Azure OpenAI"""
-        with patch("gateway.azure_proxy.authenticator.get_token") as mock_get_token:
-            mock_get_token.return_value = mock_token
+        with patch("gateway.azure_proxy.auth.get_authenticator") as mock_get_auth:
+            mock_authenticator = MagicMock()
+            mock_authenticator.get_token.return_value = mock_token
+            mock_get_auth.return_value = mock_authenticator
             
             with patch("gateway.azure_proxy.httpx.AsyncClient") as mock_client_class:
                 mock_client = AsyncMock()
-                mock_response = AsyncMock()
+                mock_response = Mock()
                 mock_response.status_code = 401
                 mock_response.text = "Unauthorized"
                 mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
@@ -121,7 +129,7 @@ class TestAzureOpenAIProxy:
                     request=Mock(),
                     response=mock_response
                 )
-                mock_client.post.return_value = mock_response
+                mock_client.post = AsyncMock(return_value=mock_response)
                 mock_client_class.return_value = mock_client
                 
                 from gateway.azure_proxy import AzureOpenAIProxy
@@ -135,8 +143,10 @@ class TestAzureOpenAIProxy:
         self, mock_settings, mock_token, sample_chat_request
     ):
         """Test handling of network errors"""
-        with patch("gateway.azure_proxy.authenticator.get_token") as mock_get_token:
-            mock_get_token.return_value = mock_token
+        with patch("gateway.azure_proxy.auth.get_authenticator") as mock_get_auth:
+            mock_authenticator = MagicMock()
+            mock_authenticator.get_token.return_value = mock_token
+            mock_get_auth.return_value = mock_authenticator
             
             with patch("gateway.azure_proxy.httpx.AsyncClient") as mock_client_class:
                 mock_client = AsyncMock()
@@ -154,7 +164,7 @@ class TestAzureOpenAIProxy:
         self, mock_settings, sample_chat_request
     ):
         """Test handling of token acquisition failures"""
-        with patch("gateway.azure_proxy.authenticator.get_token") as mock_get_token:
+        with patch("gateway.azure_proxy.auth.get_authenticator") as mock_get_token:
             mock_get_token.side_effect = Exception("Token acquisition failed")
             
             from gateway.azure_proxy import AzureOpenAIProxy
@@ -181,7 +191,9 @@ class TestAzureOpenAIProxy:
     
     def test_singleton_proxy_exists(self):
         """Test that singleton proxy instance is available"""
-        from gateway.azure_proxy import proxy
+        from gateway.azure_proxy import get_proxy
+        
+        proxy = get_proxy()
         
         assert proxy is not None
         assert hasattr(proxy, "chat_completion")
@@ -198,15 +210,18 @@ class TestAzureOpenAIProxy:
             "messages": [{"role": "user", "content": "Test"}]
         }
         
-        with patch("gateway.azure_proxy.authenticator.get_token") as mock_get_token:
-            mock_get_token.return_value = mock_token
+        with patch("gateway.azure_proxy.auth.get_authenticator") as mock_get_auth:
+            mock_authenticator = MagicMock()
+            mock_authenticator.get_token.return_value = mock_token
+            mock_get_auth.return_value = mock_authenticator
             
             with patch("gateway.azure_proxy.httpx.AsyncClient") as mock_client_class:
                 mock_client = AsyncMock()
-                mock_response = AsyncMock()
+                mock_response = Mock()
                 mock_response.json.return_value = sample_chat_response
                 mock_response.raise_for_status = Mock()
-                mock_client.post.return_value = mock_response
+                mock_response.status_code = 200
+                mock_client.post = AsyncMock(return_value=mock_response)
                 mock_client_class.return_value = mock_client
                 
                 from gateway.azure_proxy import AzureOpenAIProxy
@@ -226,15 +241,16 @@ class TestAzureOpenAIProxy:
             # Endpoint WITH trailing slash
             mock_settings_module.azure_openai_endpoint = "https://test.openai.azure.com/"
             
-            with patch("gateway.azure_proxy.authenticator.get_token") as mock_get_token:
-                mock_get_token.return_value = mock_token
+            with patch("gateway.azure_proxy.auth.get_authenticator") as mock_get_auth:
+                mock_get_auth.return_value.get_token.return_value = mock_token
                 
                 with patch("gateway.azure_proxy.httpx.AsyncClient") as mock_client_class:
                     mock_client = AsyncMock()
-                    mock_response = AsyncMock()
+                    mock_response = Mock()
                     mock_response.json.return_value = sample_chat_response
                     mock_response.raise_for_status = Mock()
-                    mock_client.post.return_value = mock_response
+                    mock_response.status_code = 200
+                    mock_client.post = AsyncMock(return_value=mock_response)
                     mock_client_class.return_value = mock_client
                     
                     from gateway.azure_proxy import AzureOpenAIProxy

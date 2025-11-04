@@ -30,6 +30,8 @@ jobs:
         pip install pytest pytest-asyncio pytest-mock pytest-cov
 
     - name: Run tests with pytest
+      env:
+        PYTHONPATH: ${{ github.workspace }}
       run: |
         pytest -v --cov=gateway --cov-report=term-missing --cov-report=xml
 

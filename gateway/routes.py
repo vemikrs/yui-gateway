@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
 import logging
 
-from gateway.azure_proxy import proxy
+from gateway import azure_proxy
 
 # ロギング設定
 logging.basicConfig(
@@ -90,7 +90,7 @@ async def chat_completions(request: ChatCompletionRequest) -> Dict[str, Any]:
         request_dict = request.model_dump(exclude_none=True)
         
         # Azure OpenAI にプロキシ
-        response = await proxy.chat_completion(request_dict)
+        response = await azure_proxy.get_proxy().chat_completion(request_dict)
         
         return response
         
@@ -106,4 +106,4 @@ async def chat_completions(request: ChatCompletionRequest) -> Dict[str, Any]:
 async def shutdown_event():
     """アプリケーション終了時のクリーンアップ"""
     logger.info("Shutting down YuiGateway")
-    await proxy.close()
+    await azure_proxy.get_proxy().close()

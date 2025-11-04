@@ -108,14 +108,17 @@ class TestEntraIDAuthenticator:
             
             assert "unauthorized_client" in str(exc_info.value)
     
-    def test_singleton_authenticator_exists(self):
+    def test_singleton_authenticator_exists(self, mock_settings):
         """Test that singleton authenticator instance is available"""
-        from gateway.auth import authenticator
-        
-        assert authenticator is not None
-        assert hasattr(authenticator, "get_token")
-        assert hasattr(authenticator, "app")
-        assert hasattr(authenticator, "scope")
+        with patch("gateway.auth.ConfidentialClientApplication") as mock_app_class:
+            from gateway.auth import get_authenticator
+            
+            authenticator = get_authenticator()
+            
+            assert authenticator is not None
+            assert hasattr(authenticator, "get_token")
+            assert hasattr(authenticator, "app")
+            assert hasattr(authenticator, "scope")
     
     def test_get_token_returns_string(self, mock_settings, mock_token):
         """Test that get_token returns a string token"""

@@ -8,6 +8,7 @@ Microsoft Authentication Library (MSAL) を使用して、
 
 from msal import ConfidentialClientApplication
 from gateway.settings import settings
+from typing import Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -60,5 +61,25 @@ class EntraIDAuthenticator:
             raise Exception(f"Token acquisition failed: {error_msg}")
 
 
-# シングルトンインスタンス
-authenticator = EntraIDAuthenticator()
+# シングルトンインスタンス（遅延初期化）
+_authenticator_instance: Optional[EntraIDAuthenticator] = None
+
+
+def get_authenticator() -> EntraIDAuthenticator:
+    """シングルトン authenticator インスタンスを取得
+    
+    初回呼び出し時にインスタンス化し、以降は同じインスタンスを返す。
+    テストでモックしやすいように関数として提供。
+    
+    Returns:
+        EntraIDAuthenticator: シングルトンインスタンス
+    """
+    global _authenticator_instance
+    if _authenticator_instance is None:
+        _authenticator_instance = EntraIDAuthenticator()
+    return _authenticator_instance
+
+
+# 後方互換性のためのエイリアス
+# 使用側で get_authenticator() への移行を推奨
+authenticator = property(lambda self: get_authenticator())

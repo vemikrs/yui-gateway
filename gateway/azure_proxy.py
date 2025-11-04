@@ -5,9 +5,9 @@ OpenAI 互換のリクエストを受け取り、Azure OpenAI API 形式に変�
 """
 
 import httpx
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from gateway.settings import settings
-from gateway.auth import authenticator
+from gateway import auth
 import logging
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class AzureOpenAIProxy:
             httpx.HTTPError: HTTP リクエストに失敗した場合
         """
         # トークンを取得
-        token = authenticator.get_token()
+        token = auth.get_authenticator().get_token()
         
         # Azure OpenAI のデプロイメント名を取得（model フィールドから）
         deployment_name = request_data.get("model", "gpt-4")
@@ -94,5 +94,24 @@ class AzureOpenAIProxy:
         await self.client.aclose()
 
 
-# シングルトンインスタンス
-proxy = AzureOpenAIProxy()
+# シングルトンインスタンス（遅延初期化）
+_proxy_instance: Optional[AzureOpenAIProxy] = None
+
+
+def get_proxy() -> AzureOpenAIProxy:
+    """シングルトン proxy インスタンスを取得
+    
+    初回呼び出し時にインスタンス化し、以降は同じインスタンスを返す。
+    テストでモックしやすいように関数として提供。
+    
+    Returns:
+        AzureOpenAIProxy: シングルトンインスタンス
+    """
+    global _proxy_instance
+    if _proxy_instance is None:
+        _proxy_instance = AzureOpenAIProxy()
+    return _proxy_instance
+
+
+# 後方互換性のためのエイリアス
+proxy = property(lambda self: get_proxy())

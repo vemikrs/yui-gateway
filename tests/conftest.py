@@ -52,6 +52,12 @@ def mock_settings(mock_tenant_id, mock_client_id, mock_client_secret, mock_azure
     import importlib
     importlib.reload(settings_module)
     
+    # Reset singleton instances for clean test state
+    import gateway.auth
+    import gateway.azure_proxy
+    gateway.auth._authenticator_instance = None
+    gateway.azure_proxy._proxy_instance = None
+    
     return settings_module.settings
 
 
