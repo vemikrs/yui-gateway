@@ -1,0 +1,149 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start YuiGateway Server",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/uvicorn",
+      "args": [
+        "gateway.routes:app",
+        "--reload",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "isBackground": true
+    },
+    {
+      "label": "Run Tests",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/pytest",
+      "args": [
+        "tests/",
+        "-v"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Run Tests with Coverage",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/pytest",
+      "args": [
+        "tests/",
+        "-v",
+        "--cov=gateway",
+        "--cov-report=html",
+        "--cov-report=term"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "group": "test"
+    },
+    {
+      "label": "Format Code (Black)",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/black",
+      "args": [
+        "gateway/",
+        "tests/"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Lint Code (Ruff)",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/ruff",
+      "args": [
+        "check",
+        "gateway/",
+        "tests/"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Lint and Fix (Ruff)",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/ruff",
+      "args": [
+        "check",
+        "--fix",
+        "gateway/",
+        "tests/"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Install Dependencies",
+      "type": "shell",
+      "command": "poetry",
+      "args": [
+        "install"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Install Pre-commit Hooks",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/pre-commit",
+      "args": [
+        "install"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Full Check (Format + Lint + Test)",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Format Code (Black)",
+        "Lint Code (Ruff)",
+        "Run Tests"
+      ],
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}
