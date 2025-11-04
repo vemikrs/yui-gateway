@@ -70,30 +70,30 @@ async def health():
 @app.post("/v1/chat/completions")
 async def chat_completions(request: ChatCompletionRequest) -> Dict[str, Any]:
     """チャット補完エンドポイント（OpenAI 互換）
-    
+
     OpenAI API の /v1/chat/completions と同じインターフェースを提供。
     リクエストは Entra ID トークン認証を経て Azure OpenAI に転送される。
-    
+
     Args:
         request: チャット補完リクエスト
-    
+
     Returns:
         Dict[str, Any]: Azure OpenAI からのレスポンス
-    
+
     Raises:
         HTTPException: プロキシ処理に失敗した場合
     """
     logger.info(f"Received chat completion request for model: {request.model}")
-    
+
     try:
         # リクエストを辞書に変換
         request_dict = request.model_dump(exclude_none=True)
-        
+
         # Azure OpenAI にプロキシ
         response = await azure_proxy.get_proxy().chat_completion(request_dict)
-        
+
         return response
-        
+
     except Exception as e:
         logger.error(f"Error processing chat completion: {str(e)}")
         raise HTTPException(

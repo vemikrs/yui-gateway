@@ -46,18 +46,18 @@ def mock_settings(mock_tenant_id, mock_client_id, mock_client_secret, mock_azure
     monkeypatch.setenv("CLIENT_SECRET", mock_client_secret)
     monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", mock_azure_endpoint)
     monkeypatch.setenv("SCOPE", "https://cognitiveservices.azure.com/.default")
-    
+
     # Re-import settings to pick up new environment variables
     from gateway import settings as settings_module
     import importlib
     importlib.reload(settings_module)
-    
+
     # Reset singleton instances for clean test state
     import gateway.auth
     import gateway.azure_proxy
     gateway.auth._authenticator_instance = None
     gateway.azure_proxy._proxy_instance = None
-    
+
     return settings_module.settings
 
 
