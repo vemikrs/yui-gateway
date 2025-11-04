@@ -2,7 +2,7 @@
   // Python settings
   "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
   "python.terminal.activateEnvironment": true,
-  
+
   // Formatting
   "[python]": {
     "editor.defaultFormatter": "ms-python.black-formatter",
@@ -11,7 +11,7 @@
       "source.organizeImports": "explicit"
     }
   },
-  
+
   // Linting
   "python.linting.enabled": true,
   "python.linting.pylintEnabled": false,
@@ -20,25 +20,25 @@
     "--max-line-length=88",
     "--extend-ignore=E203,W503"
   ],
-  
+
   // Testing
   "python.testing.pytestEnabled": true,
   "python.testing.unittestEnabled": false,
   "python.testing.pytestArgs": [
     "tests"
   ],
-  
+
   // Type checking
   "python.analysis.typeCheckingMode": "basic",
   "python.analysis.autoImportCompletions": true,
-  
+
   // Editor settings
   "editor.rulers": [88],
   "editor.tabSize": 4,
   "editor.insertSpaces": true,
   "files.trimTrailingWhitespace": true,
   "files.insertFinalNewline": true,
-  
+
   // Files to exclude from explorer
   "files.exclude": {
     "**/__pycache__": true,
@@ -46,17 +46,17 @@
     "**/.pytest_cache": true,
     "**/.venv": false
   },
-  
+
   // Search exclusions
   "search.exclude": {
     "**/.venv": true,
     "**/node_modules": true,
     "**/*.code-search": true
   },
-  
+
   // Git
   "git.ignoreLimitWarning": true,
-  
+
   // GitHub Copilot
   "github.copilot.enable": {
     "*": true,

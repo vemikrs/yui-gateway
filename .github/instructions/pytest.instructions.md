@@ -29,13 +29,13 @@ from unittest.mock import AsyncMock, patch
 async def test_chat_completion_success():
     # Arrange
     mock_response = {"choices": [{"message": {"content": "test"}}]}
-    
+
     # Act
     with patch("gateway.azure_proxy.authenticator.get_token", return_value="fake_token"):
         with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
             mock_post.return_value.json.return_value = mock_response
             result = await proxy.chat_completion({"model": "gpt-4", "messages": []})
-    
+
     # Assert
     assert result == mock_response
     mock_post.assert_called_once()
