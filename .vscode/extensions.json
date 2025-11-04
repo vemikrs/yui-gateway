@@ -1,0 +1,31 @@
+{
+  "recommendations": [
+    // Python development
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-python.black-formatter",
+    
+    // GitHub Copilot
+    "github.copilot",
+    "github.copilot-chat",
+    
+    // Testing
+    "littlefoxteam.vscode-python-test-adapter",
+    
+    // YAML/TOML support
+    "redhat.vscode-yaml",
+    "tamasfe.even-better-toml",
+    
+    // Docker support
+    "ms-azuretools.vscode-docker",
+    
+    // Git
+    "eamodio.gitlens",
+    
+    // Markdown
+    "yzhang.markdown-all-in-one",
+    
+    // EditorConfig
+    "editorconfig.editorconfig"
+  ]
+}

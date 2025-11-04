@@ -27,7 +27,7 @@ ENV/
 .venv
 
 # IDE
-.vscode/
+# .vscode/ - tracked for team consistency
 .idea/
 *.swp
 *.swo
