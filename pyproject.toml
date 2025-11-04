@@ -1,0 +1,12 @@
+[tool.poetry]
+name = "yui-gateway"
+version = "0.1.0"
+description = "Entra ID-based local proxy to Azure OpenAI"
+authors = ["you@example.com"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+fastapi = "*"
+uvicorn = "*"
+msal = "*"
+httpx = "*"
