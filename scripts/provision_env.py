@@ -154,7 +154,8 @@ def list_openai_accounts(credential) -> List[OpenAIAccount]:
             for acct in cog_client.accounts.list():
                 try:
                     kind = getattr(acct, "kind", "") or ""
-                    if kind.lower() != "openai":
+                    # Azure OpenAI can be either dedicated 'OpenAI' or multi-service 'AIServices'
+                    if kind.lower() not in ("openai", "aiservices"):
                         continue
                     rg = acct.id.split("/resourceGroups/")[1].split("/")[0]
                     accounts.append(
@@ -195,7 +196,8 @@ def list_openai_accounts(credential) -> List[OpenAIAccount]:
                 for it in items:
                     try:
                         kind = (it.get("kind") or "").lower()
-                        if kind != "openai":
+                        # Azure OpenAI can be either dedicated 'OpenAI' or multi-service 'AIServices'
+                        if kind not in ("openai", "aiservices"):
                             continue
                         rid = it.get("id")
                         rg = rid.split("/resourceGroups/")[1].split("/")[0] if rid else ""
