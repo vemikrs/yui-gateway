@@ -93,24 +93,24 @@ source .venv/bin/activate
 pip install fastapi uvicorn[standard] msal httpx pydantic-settings python-dotenv
 ```
 
-### 3. 設定ファイルの準備
+### 3. 環境設定 - 自動プロビジョニング（推奨）
 
-最も簡単なのは Azure SDK を使った全自動プロビジョニングです。GUI ログイン（ブラウザ）でサインインし、複数リソースがある場合はその場で選択できます。アプリ登録の作成、クライアントシークレット発行、サービスプリンシパル作成、Azure OpenAI リソースへの RBAC 付与、`.env` 生成まで一括で行います。
+**🎯 推奨方法: 全自動セットアップ**
+
+Azure SDK を使った全自動プロビジョニングで、アプリ登録の作成、クライアントシークレット発行、サービスプリンシパル作成、Azure OpenAI リソースへの RBAC 付与、`.env` 生成まで一括で行います。
 
 ```bash
-# 推奨: GUI ログイン + 対話選択
+# 最も簡単: GUI ログイン + 対話式選択
 python scripts/provision_env.py --login interactive --select
 ```
 
-CLI ログイン済み（`az login`）の環境で実行したい場合:
+**その他のオプション:**
 
 ```bash
+# CLI ログイン済みの場合
 python scripts/provision_env.py --login cli
-```
 
-特定のリソースを明示したい場合（いずれのログインモードでも可）:
-
-```bash
+# 特定のリソースを明示する場合
 python scripts/provision_env.py \
   --subscription-id <SUBSCRIPTION_ID> \
   --resource-group <RESOURCE_GROUP> \
@@ -118,10 +118,7 @@ python scripts/provision_env.py \
   --app-name YuiGateway-App
 ```
 
-- 既定の `SCOPE` は `https://cognitiveservices.azure.com/.default` です。
-- 十分な権限（アプリ登録の作成権限 + 対象リソースへの RBAC 付与権限）が必要です。
-
-VS Code のタスクからも実行できます（推奨）:
+**VS Code からの実行（推奨）:**
 
 ```bash
 # コマンドパレット → "Tasks: Run Task" →
@@ -129,19 +126,24 @@ VS Code のタスクからも実行できます（推奨）:
 #   ・Provision .env (CLI)
 ```
 
-権限や運用上の理由でプロビジョニングを行いたくない場合は、`.env` の自動編集のみ行う簡易スクリプトも利用できます:
+**⚠️ 必要な権限:**
+- Entra 側: Application Administrator（アプリ登録作成権限）
+- Azure 側: 対象リソースへのロール付与権限（Owner または User Access Administrator）
+
+---
+
+### 代替手段: 手動設定（組織ポリシー等で自動化が制限されている場合）
+
+**🔧 簡易セットアップ（.env ファイルのみ作成）:**
 
 ```bash
 python scripts/setup_env.py
+# または VS Code タスク: "Setup .env (simple)"
 ```
 
-VS Code のタスクからも実行可能:
+**📝 完全手動設定（自動化が一切使用できない場合）:**
 
-```bash
-# コマンドパレット → "Tasks: Run Task" → "Setup .env (simple)"
-```
-
-手動で設定する場合は、プロジェクト直下に `.env` を作成し、以下のキーを設定してください:
+プロジェクト直下に `.env` を作成し、以下のキーを手動で設定:
 
 ```env
 # Azure AD (Entra ID) 認証情報
@@ -246,15 +248,52 @@ curl http://localhost:8000/
 }
 ```
 
-### 3. チャット補完リクエスト
+### 3. デプロイメント情報の確認
+
+APIを使用する前に、利用可能なデプロイメントとそのモデル情報を確認することをお勧めします：
+
+```bash
+# デプロイメント情報を取得
+python scripts/list_deployments.py
+```
+
+**出力例:**
+```
+Available deployments for your-resource-name:
+  - gpt-5-mini
+    Model: gpt-5-mini (version: 2025-08-07)
+    Capacity: 20
+    State: Succeeded
+
+  - gpt-4-deployment
+    Model: gpt-4 (version: 0613)
+    Capacity: 10
+    State: Succeeded
+```
+
+### 4. チャット補完リクエスト
 
 #### curl を使用
 
 ```bash
+# 新しいモデル（gpt-5-mini など）の場合
 curl -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gpt-4",
+    "model": "gpt-5-mini",
+    "messages": [
+      {"role": "system", "content": "あなたは親切なアシスタントです。"},
+      {"role": "user", "content": "こんにちは！"}
+    ],
+    "temperature": 0.7,
+    "max_completion_tokens": 100
+  }'
+
+# 従来のモデル（gpt-4, gpt-35-turbo など）の場合
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4-deployment",
     "messages": [
       {"role": "system", "content": "あなたは親切なアシスタントです。"},
       {"role": "user", "content": "こんにちは！"}
@@ -264,28 +303,37 @@ curl -X POST http://localhost:8000/v1/chat/completions \
   }'
 ```
 
-**注意:** `model` フィールドには Azure OpenAI の**デプロイメント名**を指定してください。
+**重要:**
+- `model` フィールドには Azure OpenAI の**デプロイメント名**を指定してください
+- **新しいモデル**（gpt-5-mini など）では `max_completion_tokens` を使用
+- **従来のモデル**（gpt-4, gpt-35-turbo など）では `max_tokens` を使用
 
 **レスポンス例:**
 ```json
 {
-  "id": "chatcmpl-8xxx",
-  "object": "chat.completion",
-  "created": 1234567890,
-  "model": "gpt-4",
   "choices": [
     {
+      "content_filter_results": {
+        "hate": {"filtered": false, "severity": "safe"},
+        "self_harm": {"filtered": false, "severity": "safe"},
+        "sexual": {"filtered": false, "severity": "safe"},
+        "violence": {"filtered": false, "severity": "safe"}
+      },
+      "finish_reason": "stop",
       "index": 0,
       "message": {
-        "role": "assistant",
-        "content": "こんにちは！何かお手伝いできることはありますか？"
-      },
-      "finish_reason": "stop"
+        "content": "こんにちは！何かお手伝いできることはありますか？",
+        "role": "assistant"
+      }
     }
   ],
+  "created": 1762336950,
+  "id": "chatcmpl-CYUdSSQyWMzHApI41AWigu81ZYRqQ",
+  "model": "gpt-5-mini-2025-08-07",
+  "object": "chat.completion",
   "usage": {
-    "prompt_tokens": 25,
     "completion_tokens": 15,
+    "prompt_tokens": 25,
     "total_tokens": 40
   }
 }
@@ -302,16 +350,20 @@ import openai
 openai.api_base = "http://localhost:8000/v1"
 openai.api_key = "dummy"  # 認証は Entra ID で行われるため任意の値でOK
 
-# チャット補完リクエスト
+# チャット補完リクエスト（従来のモデルの場合）
 response = openai.ChatCompletion.create(
-    model="gpt-4",  # Azure OpenAI のデプロイメント名
+    model="gpt-4-deployment",  # Azure OpenAI のデプロイメント名
     messages=[
         {"role": "system", "content": "あなたは親切なアシスタントです。"},
         {"role": "user", "content": "Pythonについて教えてください。"}
     ],
     temperature=0.7,
-    max_tokens=200
+    max_tokens=200  # 従来のモデルでは max_tokens
 )
+
+# 新しいモデル（gpt-5-mini など）の場合
+# 注意: openai v0.x では max_completion_tokens は直接サポートされていません
+# この場合は httpx や新しい openai v1.x を使用してください
 
 print(response.choices[0].message.content)
 ```
@@ -327,15 +379,26 @@ client = OpenAI(
     api_key="dummy"  # 任意の値でOK
 )
 
-# チャット補完リクエスト
+# チャット補完リクエスト（従来のモデル）
 response = client.chat.completions.create(
-    model="gpt-4",
+    model="gpt-4-deployment",
     messages=[
         {"role": "system", "content": "あなたは親切なアシスタントです。"},
         {"role": "user", "content": "Pythonについて教えてください。"}
     ],
     temperature=0.7,
-    max_tokens=200
+    max_tokens=200  # 従来のモデル用
+)
+
+# チャット補完リクエスト（新しいモデル）
+response = client.chat.completions.create(
+    model="gpt-5-mini",
+    messages=[
+        {"role": "system", "content": "あなたは親切なアシスタントです。"},
+        {"role": "user", "content": "Pythonについて教えてください。"}
+    ],
+    temperature=0.7,
+    max_completion_tokens=200  # 新しいモデル用
 )
 
 print(response.choices[0].message.content)
@@ -352,10 +415,12 @@ async def chat():
         response = await client.post(
             "http://localhost:8000/v1/chat/completions",
             json={
-                "model": "gpt-4",
+                "model": "gpt-5-mini",  # または "gpt-4-deployment"
                 "messages": [
                     {"role": "user", "content": "こんにちは！"}
-                ]
+                ],
+                "max_completion_tokens": 50  # 新しいモデルの場合
+                # "max_tokens": 50  # 従来のモデルの場合
             }
         )
         return response.json()
@@ -371,7 +436,8 @@ print(result["choices"][0]["message"]["content"])
 | `model` | string | ✅ | - | Azure OpenAI のデプロイメント名 |
 | `messages` | array | ✅ | - | メッセージ配列（role と content を含む） |
 | `temperature` | float | ❌ | 1.0 | ランダム性の制御 (0.0-2.0) |
-| `max_tokens` | integer | ❌ | null | 生成する最大トークン数 |
+| `max_tokens` | integer | ❌ | null | 生成する最大トークン数（従来モデル用） |
+| `max_completion_tokens` | integer | ❌ | null | 生成する最大トークン数（新しいモデル用） |
 | `top_p` | float | ❌ | 1.0 | 核サンプリングのしきい値 (0.0-1.0) |
 | `n` | integer | ❌ | 1 | 生成する補完数 |
 | `stream` | boolean | ❌ | false | ストリーミングレスポンス (未実装) |
@@ -482,15 +548,33 @@ ERROR: 404 Not Found - The API deployment for this resource does not exist
 ```
 
 **解決方法:**
-1. Azure Portal で Azure OpenAI リソースを開く
-2. 「Model deployments」でデプロイ済みモデルを確認
-3. リクエストの `model` フィールドにデプロイメント名を正しく指定
+1. 利用可能なデプロイメントを確認:
+   ```bash
+   python scripts/list_deployments.py
+   ```
+2. Azure Portal で Azure OpenAI リソースを開く
+3. 「Model deployments」でデプロイ済みモデルを確認
+4. リクエストの `model` フィールドにデプロイメント名を正しく指定
    - ❌ `"model": "gpt-4"` (モデル名)
-   - ✅ `"model": "my-gpt4-deployment"` (デプロイメント名)
+   - ✅ `"model": "gpt-5-mini"` (実際のデプロイメント名)
 
 ---
 
-### 問題 5: .env ファイルが読み込まれない
+### 問題 5: パラメータエラー
+
+**エラー例:**
+```
+ERROR: 400 Bad Request - Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.
+```
+
+**解決方法:**
+1. モデルの種類に応じて適切なパラメータを使用:
+   - **新しいモデル**（gpt-5-mini など）: `max_completion_tokens`
+   - **従来のモデル**（gpt-4, gpt-35-turbo など）: `max_tokens`
+2. `python scripts/list_deployments.py` でモデルバージョンを確認
+3. 必要に応じてリクエストパラメータを調整
+
+### 問題 6: .env ファイルが読み込まれない
 
 **解決方法:**
 1. `.env` ファイルがプロジェクトルートに存在するか確認
@@ -508,7 +592,7 @@ ERROR: 404 Not Found - The API deployment for this resource does not exist
 
 ---
 
-### 問題 6: ポート 8000 が使用中
+### 問題 7: ポート 8000 が使用中
 
 **エラー例:**
 ```

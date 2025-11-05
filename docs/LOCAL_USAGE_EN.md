@@ -5,13 +5,15 @@ YuiGateway is a local proxy that securely connects to Azure OpenAI using Entra I
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)
-2. [Setup Instructions](#setup-instructions)
-3. [Configuration](#configuration)
-4. [Starting the Application](#starting-the-application)
-5. [Usage](#usage)
-6. [Running Tests](#running-tests)
-7. [Troubleshooting](#troubleshooting)
-8. [Development and Customization](#development-and-customization)
+2. [Quick Start (Auto-Provisioning)](#quick-start-auto-provisioning)
+3. [Setup Instructions](#setup-instructions)
+4. [Configuration File Preparation](#configuration-file-preparation)
+5. [Starting the Application](#starting-the-application)
+6. [Usage Examples](#usage-examples)
+7. [VS Code Integration](#vs-code-integration)
+8. [Running Tests](#running-tests)
+9. [Troubleshooting](#troubleshooting)
+10. [Development and Customization](#development-and-customization)
 
 ---
 
@@ -28,7 +30,7 @@ YuiGateway is a local proxy that securely connects to Azure OpenAI using Entra I
   ```bash
   # Install Poetry
   curl -sSL https://install.python-poetry.org | python3 -
-  
+
   # Or use pip
   pip install poetry
   ```
@@ -40,15 +42,63 @@ YuiGateway is a local proxy that securely connects to Azure OpenAI using Entra I
 
 ### Azure Prerequisites
 
-1. **Azure OpenAI Resource**
-   - Azure OpenAI Service resource created in Azure Portal
-   - At least one model deployed (e.g., gpt-4, gpt-35-turbo)
+1. **Azure Subscription**
+   - Active Azure subscription with appropriate permissions
+   - Azure OpenAI Service access (may require application approval)
 
-2. **Entra ID App Registration**
-   - Application registered in Azure Portal "App registrations"
-   - Client ID and Client Secret generated
-   - Following permissions granted:
-     - `Cognitive Services User` role (on Azure OpenAI resource)
+2. **Authentication Method** (choose one):
+   - **Interactive Login** (recommended for local development)
+   - **Device Code Flow** (for headless environments)
+   - **Service Principal** (for CI/CD or automated scenarios)
+
+3. **Azure OpenAI Resource & Model Deployment**
+   - Azure OpenAI Service resource with deployed models
+   - Compatible models: gpt-4, gpt-4-32k, gpt-35-turbo, gpt-35-turbo-16k
+   - Note: Different model generations have different parameter requirements
+     - Legacy models: use `max_tokens`
+     - Newer models: use `max_completion_tokens`
+
+---
+
+## Quick Start (Auto-Provisioning)
+
+🚀 **Fastest way to get started**
+
+YuiGateway includes an automated provisioning system that handles Azure resource discovery and configuration:
+
+```bash
+# Clone and navigate
+git clone https://github.com/vemikrs/yui-gateway.git
+cd yui-gateway
+
+# Install dependencies
+poetry install && poetry shell
+
+# Auto-provision and start (with interactive login)
+python scripts/provision_env.py --mode interactive
+# Automatically creates .env and starts the server
+```
+
+**Alternative authentication modes:**
+```bash
+# Device code flow (for remote/headless environments)
+python scripts/provision_env.py --mode device
+
+# CLI-based credential input
+python scripts/provision_env.py --mode cli
+```
+
+**Deployment discovery:**
+```bash
+# List available deployments across subscriptions
+python scripts/list_deployments.py
+# Shows: Resource names, model versions, deployment status
+```
+
+**VS Code Integration:**
+- Open the project in VS Code
+- Use built-in tasks: `Ctrl+Shift+P` → "Tasks: Run Task"
+- Available: Start Server, Run Tests, Format Code, etc.
 
 ---
 
@@ -90,15 +140,44 @@ source .venv/bin/activate
 pip install fastapi uvicorn[standard] msal httpx pydantic-settings python-dotenv
 ```
 
-### 3. Configuration
+---
+
+## Configuration File Preparation
+
+### 🎯 Recommended Method: Auto-Provisioning
+
+The **automated provisioning system** handles all configuration automatically:
 
 ```bash
-# Copy template
+# Automatic setup with interactive login
+python scripts/provision_env.py --mode interactive
+
+# Alternative: Device code flow
+python scripts/provision_env.py --mode device
+
+# The script will:
+# 1. Authenticate with Azure
+# 2. Discover available resources
+# 3. Create optimized .env configuration
+# 4. Start the server automatically
+```
+
+**Benefits of auto-provisioning:**
+- ✅ No manual credential management
+- 🔍 Automatic resource discovery
+- 🚀 Immediate startup after configuration
+- 🔄 Easy switching between environments
+
+### Alternative Method: Manual Configuration
+
+💡 **Use this method when auto-provisioning is restricted by organizational policies**
+
+**Step 1: Copy template**
+```bash
 cp .env.template .env
 ```
 
-Edit the `.env` file with your Azure credentials:
-
+**Step 2: Edit the .env file**
 ```env
 # Azure AD (Entra ID) authentication
 TENANT_ID=your-tenant-id-here
@@ -139,64 +218,53 @@ AZURE_OPENAI_ENDPOINT=https://your-resource-name.openai.azure.com
 ### Method 1: Using Script
 
 ```bash
+# Allow auto-provisioning if .env doesn't exist
+AUTO_PROVISION=1 bash scripts/start_local.sh
+
+# Or start normally with existing .env
 bash scripts/start_local.sh
 ```
 
-### Method 2: Direct Start
+### Method 2: VS Code Tasks
+
+Open in VS Code and use integrated tasks:
+```
+Ctrl+Shift+P → "Tasks: Run Task" → "Start YuiGateway Server"
+```
+
+### Method 3: Direct Start
 
 ```bash
 # Using Poetry
 poetry run uvicorn gateway.routes:app --reload --host 0.0.0.0 --port 8000
 
-# Using pip
-uvicorn gateway.routes:app --reload --host 0.0.0.0 --port 8000
+# Using virtual environment
+.venv/bin/uvicorn gateway.routes:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Successful startup logs:
+### Successful Startup Verification
+
+**Startup logs:**
 ```
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 INFO:     Started reloader process [xxxxx] using WatchFiles
 INFO:     Started server process [xxxxx]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
+INFO:     Application startup complete.
+```
+
+**Health check:**
+```bash
+curl http://localhost:8000/health
+# → {"status": "healthy"}
 ```
 
 ---
 
-## Usage
+## Usage Examples
 
-### 1. Health Check
-
-Verify the application is running:
-
-```bash
-curl http://localhost:8000/health
-```
-
-**Expected response:**
-```json
-{
-  "status": "healthy"
-}
-```
-
-### 2. Get Service Information
-
-```bash
-curl http://localhost:8000/
-```
-
-**Expected response:**
-```json
-{
-  "service": "YuiGateway",
-  "version": "0.1.0",
-  "description": "Entra ID-based local proxy to Azure OpenAI",
-  "endpoints": ["/v1/chat/completions"]
-}
-```
-
-### 3. Chat Completion Request
+### 1. Basic Chat Completion
 
 #### Using curl
 
@@ -210,63 +278,37 @@ curl -X POST http://localhost:8000/v1/chat/completions \
       {"role": "user", "content": "Hello!"}
     ],
     "temperature": 0.7,
+    "max_completion_tokens": 100
+  }'
+```
+
+#### Model Parameter Compatibility
+
+⚠️ **Important:** Different model generations use different token limit parameters:
+
+```bash
+# For newer models (gpt-4-turbo and later)
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4",
+    "messages": [...],
+    "max_completion_tokens": 100
+  }'
+
+# For legacy models (gpt-35-turbo, older gpt-4)
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-35-turbo",
+    "messages": [...],
     "max_tokens": 100
   }'
 ```
 
-**Note:** The `model` field should specify the **deployment name** in Azure OpenAI.
+### 2. Python Integration
 
-**Example response:**
-```json
-{
-  "id": "chatcmpl-8xxx",
-  "object": "chat.completion",
-  "created": 1234567890,
-  "model": "gpt-4",
-  "choices": [
-    {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "Hello! How can I help you today?"
-      },
-      "finish_reason": "stop"
-    }
-  ],
-  "usage": {
-    "prompt_tokens": 20,
-    "completion_tokens": 10,
-    "total_tokens": 30
-  }
-}
-```
-
-#### Using Python
-
-##### Standard openai library (v0.x)
-
-```python
-import openai
-
-# Set YuiGateway as base URL
-openai.api_base = "http://localhost:8000/v1"
-openai.api_key = "dummy"  # Any value works as auth is via Entra ID
-
-# Chat completion request
-response = openai.ChatCompletion.create(
-    model="gpt-4",  # Azure OpenAI deployment name
-    messages=[
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "Tell me about Python."}
-    ],
-    temperature=0.7,
-    max_tokens=200
-)
-
-print(response.choices[0].message.content)
-```
-
-##### New openai library (v1.x)
+#### OpenAI Library v1.x (Recommended)
 
 ```python
 from openai import OpenAI
@@ -274,24 +316,46 @@ from openai import OpenAI
 # Initialize client
 client = OpenAI(
     base_url="http://localhost:8000/v1",
-    api_key="dummy"  # Any value works
+    api_key="dummy"  # Any value works with Entra ID auth
 )
 
-# Chat completion request
+# Chat completion with proper parameter handling
 response = client.chat.completions.create(
-    model="gpt-4",
+    model="gpt-4",  # Your Azure deployment name
     messages=[
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "Tell me about Python."}
     ],
     temperature=0.7,
-    max_tokens=200
+    max_completion_tokens=200  # Use this for newer models
 )
 
 print(response.choices[0].message.content)
 ```
 
-##### Using httpx (low-level API)
+#### Legacy OpenAI Library (v0.x)
+
+```python
+import openai
+
+# Set YuiGateway as base URL
+openai.api_base = "http://localhost:8000/v1"
+openai.api_key = "dummy"  # Any value works
+
+response = openai.ChatCompletion.create(
+    model="gpt-35-turbo",  # Azure deployment name
+    messages=[
+        {"role": "user", "content": "Hello!"}
+    ],
+    max_tokens=100  # Use this for legacy models
+)
+
+print(response.choices[0].message.content)
+```
+
+### 3. Advanced Usage
+
+#### Async HTTP Client (httpx)
 
 ```python
 import httpx
@@ -303,303 +367,413 @@ async def chat():
             "http://localhost:8000/v1/chat/completions",
             json={
                 "model": "gpt-4",
-                "messages": [
-                    {"role": "user", "content": "Hello!"}
-                ]
+                "messages": [{"role": "user", "content": "Hello!"}],
+                "max_completion_tokens": 100,
+                "temperature": 0.3
             }
         )
         return response.json()
 
 result = asyncio.run(chat())
-print(result["choices"][0]["message"]["content"])
+print(result["choices"][0]["message"]["content])
 ```
 
-### 4. Parameter Reference
+#### Parameter Reference
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `model` | string | ✅ | - | Azure OpenAI deployment name |
-| `messages` | array | ✅ | - | Array of messages with role and content |
-| `temperature` | float | ❌ | 1.0 | Controls randomness (0.0-2.0) |
-| `max_tokens` | integer | ❌ | null | Maximum tokens to generate |
-| `top_p` | float | ❌ | 1.0 | Nucleus sampling threshold (0.0-1.0) |
-| `n` | integer | ❌ | 1 | Number of completions to generate |
-| `stream` | boolean | ❌ | false | Streaming response (not implemented) |
-| `presence_penalty` | float | ❌ | 0.0 | Encourages new topics (-2.0-2.0) |
-| `frequency_penalty` | float | ❌ | 0.0 | Discourages repetition (-2.0-2.0) |
+| Parameter | Type | Required | Notes |
+|-----------|------|----------|-------|
+| `model` | string | ✅ | Azure OpenAI deployment name |
+| `messages` | array | ✅ | Conversation history |
+| `max_completion_tokens` | integer | ❌ | For newer models (recommended) |
+| `max_tokens` | integer | ❌ | For legacy models |
+| `temperature` | float | ❌ | 0.0-2.0, controls randomness |
+| `top_p` | float | ❌ | 0.0-1.0, nucleus sampling |
+| `presence_penalty` | float | ❌ | -2.0-2.0, encourages new topics |
+| `frequency_penalty` | float | ❌ | -2.0-2.0, discourages repetition |
+
+---
+
+## VS Code Integration
+
+YuiGateway includes pre-configured VS Code tasks for seamless development:
+
+### Available Tasks
+
+Access via `Ctrl+Shift+P` → "Tasks: Run Task":
+
+1. **Start YuiGateway Server** - Launch server with auto-reload
+2. **Run Tests** - Execute pytest test suite
+3. **Run Tests with Coverage** - Tests with coverage report
+4. **Format Code (Black)** - Auto-format Python code
+5. **Lint Code (Ruff)** - Check code quality
+6. **Full Check** - Format + Lint + Test in sequence
+
+### Development Workflow
+
+```bash
+# 1. Open in VS Code
+code /path/to/yui-gateway
+
+# 2. Install dependencies (if needed)
+Ctrl+Shift+P → "Tasks: Run Task" → "Install Dependencies"
+
+# 3. Start development server
+Ctrl+Shift+P → "Tasks: Run Task" → "Start YuiGateway Server"
+
+# 4. Run tests during development
+Ctrl+Shift+P → "Tasks: Run Task" → "Run Tests"
+```
+
+### Task Configuration
+
+All tasks are defined in `.vscode/tasks.json` with proper Python virtual environment integration.
 
 ---
 
 ## Running Tests
 
-### Run All Tests
+### Quick Test Execution
 
-```bash
-# Using Poetry
-poetry run pytest
-
-# Or using pip
-pytest
+**VS Code Integration:**
+```
+Ctrl+Shift+P → "Tasks: Run Task" → "Run Tests"
 ```
 
-### Run Tests with Coverage
-
+**Command Line:**
 ```bash
-poetry run pytest --cov=gateway --cov-report=html
+# Basic test run
+poetry run pytest tests/ -v
+
+# With coverage report
+poetry run pytest tests/ -v --cov=gateway --cov-report=html --cov-report=term
+
+# Fast execution (parallel)
+poetry run pytest tests/ -v -n auto
 ```
 
-Coverage report is generated in `htmlcov/index.html`.
+### Test Categories
 
-### Run Specific Test Files
+YuiGateway includes **45+ comprehensive tests** covering:
+
+- **Authentication Tests** (`test_auth.py`) - MSAL token acquisition, error handling
+- **Proxy Tests** (`test_azure_proxy.py`) - Request forwarding, response handling
+- **Route Tests** (`test_routes.py`) - FastAPI endpoints, validation
+- **Settings Tests** (`test_settings.py`) - Configuration management
+
+### Development Testing
 
 ```bash
-pytest tests/test_routes.py
-pytest tests/test_auth.py
-pytest tests/test_azure_proxy.py
-pytest tests/test_settings.py
+# Run specific test file
+pytest tests/test_routes.py -v
+
+# Run with live output
+pytest tests/ -v -s
+
+# Run tests matching pattern
+pytest tests/ -k "test_chat_completion" -v
+
+# Skip slow integration tests
+pytest tests/ -m "not slow" -v
 ```
 
-### Run with Verbose Output
+### Coverage Analysis
 
 ```bash
-pytest -v -s
-```
+# Generate detailed coverage
+poetry run pytest tests/ --cov=gateway --cov-report=html
 
-### Use Test Markers
-
-```bash
-# Run unit tests only
-pytest -m unit
-
-# Skip slow tests
-pytest -m "not slow"
+# View coverage in browser
+open htmlcov/index.html
 ```
 
 ---
 
 ## Troubleshooting
 
-### Issue 1: Token Acquisition Error
+### 🔍 Common Issues and Solutions
 
-**Error example:**
+#### Issue 1: Auto-Provisioning Authentication Failed
+
+**Error:**
 ```
-ERROR: Token acquisition failed: AADSTS700016: Application with identifier 'xxx' was not found
-```
-
-**Solution:**
-1. Verify `TENANT_ID` is correct
-2. Verify `CLIENT_ID` is correct
-3. Check that app is properly registered in Azure Portal
-4. Verify the app hasn't been deleted
-
----
-
-### Issue 2: Permission Error
-
-**Error example:**
-```
-ERROR: 401 Unauthorized
+AADSTS50020: User account 'user@domain.com' from identity provider does not exist in tenant
 ```
 
-**Solution:**
-1. Open Azure OpenAI resource in Azure Portal
-2. Go to "Access control (IAM)" → "Add role assignment"
-3. Select "Cognitive Services User" role
-4. Add your registered application
+**Solutions:**
+- ✅ Verify Azure subscription access permissions
+- ✅ Use `--mode device` for organizational accounts
+- ✅ Check tenant restrictions with IT department
+- ✅ Try with personal Microsoft account if available
 
----
+#### Issue 2: Model Parameter Compatibility
 
-### Issue 3: Endpoint Connection Error
-
-**Error example:**
+**Error:**
 ```
-ERROR: Failed to connect to Azure OpenAI endpoint
+BadRequestError: Invalid parameter 'max_tokens' for model 'gpt-4-turbo'
 ```
 
-**Solution:**
-1. Verify `AZURE_OPENAI_ENDPOINT` is correct (no trailing slash needed)
-2. Ensure endpoint starts with `https://`
-3. Check network connectivity
-4. Verify firewall or proxy settings
+**Solutions:**
+- ✅ Use `max_completion_tokens` for newer models (gpt-4-turbo, etc.)
+- ✅ Use `max_tokens` for legacy models (gpt-35-turbo, older gpt-4)
+- ✅ Run `python scripts/list_deployments.py` to check model versions
 
----
+#### Issue 3: Permission Denied on Azure Resource
 
-### Issue 4: Deployment Not Found
-
-**Error example:**
+**Error:**
 ```
-ERROR: 404 Not Found - The API deployment for this resource does not exist
+HTTPError: 403 Forbidden - Access denied due to invalid subscription key
 ```
 
-**Solution:**
-1. Open Azure OpenAI resource in Azure Portal
-2. Check "Model deployments" for deployed models
-3. Use correct deployment name in `model` field
-   - ❌ `"model": "gpt-4"` (model name)
-   - ✅ `"model": "my-gpt4-deployment"` (deployment name)
+**Solutions:**
+- ✅ Verify `Cognitive Services User` role assignment
+- ✅ Check resource-level permissions in Azure Portal
+- ✅ Ensure subscription is active and not expired
+- ✅ Re-run auto-provisioning to refresh permissions
 
----
+#### Issue 4: Environment Configuration Issues
 
-### Issue 5: .env File Not Loading
+**Symptoms:**
+- Server starts but returns authentication errors
+- Missing `.env` file after manual setup
 
-**Solution:**
-1. Verify `.env` file exists in project root
-   ```bash
-   ls -la .env
-   ```
-2. Ensure filename is exactly `.env` (not `.env.template`)
-3. Try setting environment variables directly:
-   ```bash
-   export TENANT_ID="your-tenant-id"
-   export CLIENT_ID="your-client-id"
-   export CLIENT_SECRET="your-client-secret"
-   export AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com"
-   ```
+**Solutions:**
+```bash
+# Regenerate configuration automatically
+rm .env
+python scripts/provision_env.py --mode interactive
 
----
+# Validate current configuration
+python -c "from gateway.settings import settings; print(settings.model_dump())"
 
-### Issue 6: Port 8000 Already in Use
-
-**Error example:**
-```
-ERROR: [Errno 48] Address already in use
+# Check resource accessibility
+python scripts/list_deployments.py
 ```
 
-**Solution:**
-1. Use a different port:
-   ```bash
-   uvicorn gateway.routes:app --reload --host 0.0.0.0 --port 8001
-   ```
-2. Or stop the existing process:
-   ```bash
-   # Find process using the port
-   lsof -i :8000
-   # Stop the process
-   kill -9 <PID>
-   ```
+#### Issue 5: VS Code Task Execution Problems
 
+**Error:**
+```
+The terminal process terminated with exit code: 1
+```
+
+**Solutions:**
+- ✅ Ensure Poetry virtual environment is activated: `poetry shell`
+- ✅ Check Python interpreter in VS Code: `Ctrl+Shift+P` → "Python: Select Interpreter"
+- ✅ Reinstall dependencies: `poetry install --no-cache`
+- ✅ Verify `.vscode/tasks.json` paths match your system
+
+### 🧪 Advanced Debugging
+
+#### Enable Debug Logging
+
+```bash
+# Set debug level in .env
+echo "LOG_LEVEL=DEBUG" >> .env
+
+# Or export temporarily
+export LOG_LEVEL=DEBUG
+poetry run uvicorn gateway.routes:app --reload
+```
+
+#### Check Service Health
+
+```bash
+# Test endpoint accessibility
+curl -v http://localhost:8000/health
+
+# Test Azure OpenAI connectivity
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-35-turbo","messages":[{"role":"user","content":"test"}],"max_tokens":5}'
+```
+
+#### Validate Environment
+
+```bash
+# Check all environment variables
+poetry run python -c "
+from gateway.settings import settings
+import json
+print(json.dumps(settings.model_dump(), indent=2))
+"
+
+# Test token acquisition manually
+poetry run python -c "
+from gateway.auth import authenticator
+token = authenticator.get_token()
+print('Token acquired successfully' if token else 'Token acquisition failed')
+"
+```
 ---
 
 ## Development and Customization
 
-### Code Formatting
+### 🛠️ Code Quality Tools
 
+**Integrated VS Code Tasks:**
+```
+Ctrl+Shift+P → "Tasks: Run Task" → "Format Code (Black)"
+Ctrl+Shift+P → "Tasks: Run Task" → "Lint Code (Ruff)"
+Ctrl+Shift+P → "Tasks: Run Task" → "Full Check"
+```
+
+**Command Line:**
 ```bash
-# Format with Black
+# Format code
 poetry run black gateway/ tests/
 
-# Lint with Ruff
-poetry run ruff check gateway/ tests/
+# Lint and auto-fix
+poetry run ruff check --fix gateway/ tests/
+
+# Type checking (if mypy installed)
+poetry run mypy gateway/
 ```
 
-### Change Log Level
+### ⚙️ Configuration Customization
 
-In `.env` file:
-```env
-LOG_LEVEL=DEBUG  # DEBUG, INFO, WARNING, ERROR
-```
-
-Or with environment variable:
+#### Change Log Level
 ```bash
-LOG_LEVEL=DEBUG uvicorn gateway.routes:app --reload
+# In .env file
+echo "LOG_LEVEL=DEBUG" >> .env
+
+# Or temporarily
+LOG_LEVEL=DEBUG poetry run uvicorn gateway.routes:app --reload
 ```
 
-### Change Timeout
-
-Adjust timeout in `gateway/azure_proxy.py` in `AzureOpenAIProxy.__init__`:
+#### Adjust Timeout Settings
+Edit `gateway/azure_proxy.py`:
 ```python
-self.client = httpx.AsyncClient(timeout=180.0)  # Change to 180 seconds
+self.client = httpx.AsyncClient(timeout=300.0)  # 5 minutes
 ```
 
-### Change API Version
-
-Update API version in `chat_completion` method in `gateway/azure_proxy.py`:
+#### Update Azure API Version
+Modify `gateway/azure_proxy.py`:
 ```python
 params = {
-    "api-version": "2024-08-01-preview"  # Use newer version
+    "api-version": "2024-08-01-preview"  # Latest version
 }
 ```
 
-### Add Custom Endpoints
+### 🔧 Extension Development
 
-Add new endpoints in `gateway/routes.py`:
+#### Add New Endpoints
+In `gateway/routes.py`:
 ```python
 @app.get("/v1/models")
 async def list_models():
-    """Return list of available models"""
+    """List available models"""
     return {
         "object": "list",
         "data": [
-            {"id": "gpt-4", "object": "model"},
-            {"id": "gpt-35-turbo", "object": "model"}
+            {"id": "gpt-4", "object": "model", "owned_by": "azure"},
+            {"id": "gpt-35-turbo", "object": "model", "owned_by": "azure"}
         ]
     }
 ```
 
----
+#### Add Custom Middleware
+```python
+from fastapi import Request, Response
+import time
 
-## Security Best Practices
-
-1. **Secret Management**
-   - Don't commit `.env` file to Git (already in `.gitignore`)
-   - Use environment variables or Azure Key Vault in production
-
-2. **Network Security**
-   - Use `--host 127.0.0.1` in production for localhost-only access
-   - Use reverse proxy (nginx, etc.) to enable HTTPS
-
-3. **Token Caching**
-   - MSAL caches tokens in memory only
-   - No filesystem writes
-
-4. **Logging**
-   - Don't log tokens or credentials
-   - Use `LOG_LEVEL=INFO` in production (avoid DEBUG)
-
----
-
-## FAQ
-
-### Q1: Is streaming response supported?
-
-A: Not currently implemented. Planned for future versions.
-
-### Q2: Can I connect to multiple Azure OpenAI resources?
-
-A: Currently supports single endpoint only. For multiple resources, run multiple YuiGateway instances on different ports.
-
-### Q3: Is API key-based authentication supported?
-
-A: No, YuiGateway only supports Entra ID authentication. This is by design to avoid exposing API keys.
-
-### Q4: Can I run it in Docker?
-
-A: Yes, a `Dockerfile` is included:
-```bash
-docker build -t yui-gateway .
-docker run -p 8000:8000 --env-file .env yui-gateway
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    response.headers["X-Process-Time"] = str(process_time)
+    return response
 ```
 
-### Q5: Can I use clients other than OpenAI library?
+### 🔒 Security Best Practices
 
-A: Yes, any HTTP client can be used as it provides an OpenAI-compatible API.
+1. **Environment Security**
+   - ✅ Never commit `.env` files (already in `.gitignore`)
+   - ✅ Use Azure Key Vault for production secrets
+   - ✅ Rotate client secrets regularly
+
+2. **Network Security**
+   - ✅ Use `--host 127.0.0.1` for localhost-only access
+   - ✅ Implement reverse proxy with HTTPS in production
+   - ✅ Configure appropriate CORS settings
+
+3. **Monitoring and Logging**
+   - ✅ Use structured logging in production
+   - ✅ Never log tokens or sensitive data
+   - ✅ Set `LOG_LEVEL=INFO` in production
+
+### 🐳 Docker Deployment
+
+```bash
+# Build image
+docker build -t yui-gateway .
+
+# Run with environment file
+docker run -p 8000:8000 --env-file .env yui-gateway
+
+# Run with Docker Compose
+docker-compose up -d
+```
+
+### 🧪 Testing and CI/CD
+
+#### Local Testing
+```bash
+# Full test suite
+poetry run pytest tests/ -v --cov=gateway
+
+# Specific test categories
+pytest tests/test_auth.py -v
+pytest tests/test_routes.py::test_chat_completion -v
+
+# Performance testing
+pytest tests/ -v --benchmark-only
+```
+
+#### Pre-commit Setup
+```bash
+# Install pre-commit hooks
+poetry run pre-commit install
+
+# Run hooks manually
+poetry run pre-commit run --all-files
+```
 
 ---
 
-## Support and Feedback
+## FAQ & Support
 
-- **GitHub Issues**: https://github.com/vemikrs/yui-gateway/issues
-- **Documentation**: `docs/` directory
-- **Development Guide**: `gateway/README.dev.md`
+### ❓ Frequently Asked Questions
+
+**Q: Is streaming response supported?**
+A: Currently in development. Basic streaming infrastructure is planned for v0.2.0.
+
+**Q: Can I connect to multiple Azure OpenAI resources?**
+A: Single endpoint per instance. Run multiple YuiGateway instances on different ports for multiple resources.
+
+**Q: Is OpenAI API key authentication supported?**
+A: No, by design. YuiGateway exclusively uses Entra ID to avoid key exposure risks.
+
+**Q: Can I use it with other language models?**
+A: Architecture supports model switching. Azure OpenAI is the current implementation.
+
+**Q: How do I report issues or contribute?**
+A: Use GitHub Issues for bug reports, feature requests, and contributions.
+
+### 📚 Additional Resources
+
+- **Architecture Deep Dive**: [docs/overview.md](./overview.md)
+- **Real-world Examples**: [docs/use-cases.md](./use-cases.md)
+- **Developer Documentation**: [gateway/README.dev.md](../gateway/README.dev.md)
+- **GitHub Repository**: https://github.com/vemikrs/yui-gateway
+
+### 🤝 Getting Help
+
+- **Issues & Bugs**: GitHub Issues tracker
+- **Feature Requests**: GitHub Discussions
+- **Documentation**: Built-in `docs/` directory
+- **Code Examples**: `tests/` directory contains working examples
 
 ---
 
-## Next Steps
-
-- Read [Architecture Overview](./overview.md)
-- Check [Use Cases](./use-cases.md)
-- Learn customization in [Development Guide](../gateway/README.dev.md)
-
----
-
-**Last updated:** 2024-11-04
+**Last updated:** 2024-12-19
