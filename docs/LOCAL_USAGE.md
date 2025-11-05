@@ -41,14 +41,17 @@ YuiGateway は Azure OpenAI に Entra ID (Azure AD) 認証で安全に接続す�
 ### Azure 側の前提条件
 
 1. **Azure OpenAI リソース**
-   - Azure Portal で Azure OpenAI Service リソースが作成済み
-   - 少なくとも 1 つのモデルがデプロイ済み（例: gpt-4, gpt-35-turbo）
+  - Azure Portal で Azure OpenAI Service リソースが作成済みです。
+  - 少なくとも 1 つのモデルがデプロイ済みです（例: gpt-4, gpt-35-turbo）。
 
-2. **Entra ID アプリ登録**
-   - Azure Portal の「App registrations」でアプリが登録済み
-   - クライアント ID とクライアントシークレットが発行済み
-   - 以下の権限が付与済み:
-     - `Cognitive Services User` ロール (Azure OpenAI リソースに対して)
+2. **Entra ID アプリ登録（通常は不要）**
+   - 本ガイドの自動プロビジョニング（`scripts/provision_env.py`）が、アプリ登録・クライアントシークレット・サービスプリンシパルの作成と Azure OpenAI への RBAC 付与まで実施します。
+   - 自動作成に必要な権限は次のとおりです。
+     - Entra 側: Application Administrator（または Cloud Application Administrator）相当のアプリ登録作成権限が必要です。
+     - Azure 側: 対象 Azure OpenAI リソースへのロール付与権限（例: 所有者 Owner もしくは User Access Administrator）が必要です。
+   - 組織ポリシーにより自動作成が禁止されている場合のみ、手動で次をご用意ください。
+     - App registration（`CLIENT_ID`/`CLIENT_SECRET` を取得してください）
+     - Azure OpenAI リソースに対する `Cognitive Services User` ロールの付与が必要です。
 
 ---
 
@@ -92,13 +95,20 @@ pip install fastapi uvicorn[standard] msal httpx pydantic-settings python-dotenv
 
 ### 3. 設定ファイルの準備
 
-最も簡単なのは Azure SDK を使った全自動プロビジョニングです。Entra にサインイン済みであれば（`az login`）、アプリ登録の作成、クライアントシークレット発行、サービスプリンシパル作成、Azure OpenAI リソースへの RBAC 付与、`.env` 生成まで一括で行います。
+最も簡単なのは Azure SDK を使った全自動プロビジョニングです。GUI ログイン（ブラウザ）でサインインし、複数リソースがある場合はその場で選択できます。アプリ登録の作成、クライアントシークレット発行、サービスプリンシパル作成、Azure OpenAI リソースへの RBAC 付与、`.env` 生成まで一括で行います。
 
 ```bash
-python scripts/provision_env.py
+# 推奨: GUI ログイン + 対話選択
+python scripts/provision_env.py --login interactive --select
 ```
 
-特定のリソースを明示したい場合:
+CLI ログイン済み（`az login`）の環境で実行したい場合:
+
+```bash
+python scripts/provision_env.py --login cli
+```
+
+特定のリソースを明示したい場合（いずれのログインモードでも可）:
 
 ```bash
 python scripts/provision_env.py \
@@ -114,7 +124,9 @@ python scripts/provision_env.py \
 VS Code のタスクからも実行できます（推奨）:
 
 ```bash
-# コマンドパレット → "Tasks: Run Task" → "Provision .env (Azure SDK)"
+# コマンドパレット → "Tasks: Run Task" →
+#   ・Provision .env (Interactive)
+#   ・Provision .env (CLI)
 ```
 
 権限や運用上の理由でプロビジョニングを行いたくない場合は、`.env` の自動編集のみ行う簡易スクリプトも利用できます:
@@ -177,6 +189,8 @@ AUTO_PROVISION=1 bash scripts/start_local.sh
 # 既に .env がある場合は通常起動
 bash scripts/start_local.sh
 ```
+
+VS Code からはタスク「Start YuiGateway Server」を実行すると、`.env` が無い場合に自動プロビジョンを試みた上で起動します。
 
 ### 方法 2: 直接起動
 
@@ -638,4 +652,4 @@ A: はい、OpenAI API 互換のエンドポイントを提供しているため
 
 ---
 
-**最終更新:** 2024-11-04
+**最終更新:** 2025-11-05
