@@ -67,12 +67,13 @@ def get_credential():
     Mode is determined by env var `YUI_LOGIN_MODE` in {interactive|cli|default}.
     """
     mode = (os.getenv("YUI_LOGIN_MODE") or "default").lower()
+    tenant = os.getenv("YUI_TENANT_ID") or None
     if mode == "interactive":
-        return InteractiveBrowserCredential()
+        return InteractiveBrowserCredential(tenant_id=tenant)
     if mode == "cli":
         return AzureCliCredential()
     if mode == "devicecode":
-        return DeviceCodeCredential()
+        return DeviceCodeCredential(tenant_id=tenant)
     return DefaultAzureCredential()
 
 
@@ -99,6 +100,40 @@ async def get_tenant_id(credential: DefaultAzureCredential) -> str:
         if not orgs:
             raise RuntimeError("テナント情報を取得できませんでした")
         return orgs[0]["id"]
+
+
+async def list_tenants(credential) -> List[dict]:
+    """List tenants via ARM and return [{id, name}] best-effort for display."""
+    token = credential.get_token("https://management.azure.com/.default").token
+    url = "https://management.azure.com/tenants?api-version=2020-01-01"
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(url, headers={"Authorization": f"Bearer {token}"})
+        resp.raise_for_status()
+        data = resp.json()
+        vals = data.get("value", [])
+        tenants: List[dict] = []
+        for v in vals:
+            tid = v.get("tenantId") or v.get("tenant_id")
+            if not tid:
+                continue
+            # Some tenants payloads include displayName or domains; use best available
+            name = v.get("displayName")
+            domains = v.get("domains") or []
+            if not name and domains:
+                name = domains[0]
+            tenants.append({"id": tid, "name": name or "(名前不明)"})
+        return tenants
+
+
+def select_tenant_interactive(tenants: List[dict]) -> str:
+    print("複数のテナントが見つかりました。番号を選択してください:\n")
+    for i, t in enumerate(tenants):
+        print(f"[{i}] {t.get('name')} ({t.get('id')})")
+    while True:
+        idx = input("選択番号: ").strip()
+        if idx.isdigit() and 0 <= int(idx) < len(tenants):
+            return tenants[int(idx)]["id"]
+        print("無効な入力です。もう一度入力してください。")
 
 
 def list_openai_accounts(credential) -> List[OpenAIAccount]:
@@ -314,6 +349,8 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         default="default",
         help="認証方法を指定 (interactive/cli/devicecode)",
     )
+    p.add_argument("--tenant-id", help="対象テナントIDを明示してログイン/探索を実行")
+    p.add_argument("--select-tenant", action="store_true", help="複数テナントから対話的に選択する")
     p.add_argument(
         "--select",
         action="store_true",
@@ -326,7 +363,18 @@ async def main(argv: List[str]) -> int:
     args = parse_args(argv)
     # pass login preference to get_credential via env for test compatibility
     os.environ["YUI_LOGIN_MODE"] = args.login
+    if args.tenant_id:
+        os.environ["YUI_TENANT_ID"] = args.tenant_id
     cred = get_credential()
+
+    # If requested, list tenants and prompt selection, then re-bind credential to chosen tenant
+    if args.select_tenant and not args.tenant_id:
+        tenants = await list_tenants(cred)
+        if not tenants:
+            raise RuntimeError("利用可能なテナントが見つかりませんでした。権限を確認してください。")
+        chosen = tenants[0]["id"] if len(tenants) == 1 else select_tenant_interactive(tenants)
+        os.environ["YUI_TENANT_ID"] = chosen
+        cred = get_credential()
 
     # Discover tenant and OpenAI endpoint
     tenant_id = await get_tenant_id(cred)
