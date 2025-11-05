@@ -40,4 +40,10 @@ fi
 
 # Uvicorn でアプリケーションを起動
 echo "Starting YuiGateway..."
-uvicorn gateway.routes:app --reload --host 0.0.0.0 --port 8000
+if command -v poetry >/dev/null 2>&1; then
+    poetry run uvicorn gateway.routes:app --reload --host 0.0.0.0 --port 8000
+elif [ -x .venv/bin/uvicorn ]; then
+    .venv/bin/uvicorn gateway.routes:app --reload --host 0.0.0.0 --port 8000
+else
+    uvicorn gateway.routes:app --reload --host 0.0.0.0 --port 8000
+fi
