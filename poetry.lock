@@ -33,6 +33,118 @@ test = ["anyio[trio]", "coverage[toml] (>=4.5)", "hypothesis (>=4.0)", "mock (>=
 trio = ["trio (<0.22)"]
 
 [[package]]
+name = "azure-common"
+version = "1.1.28"
+description = "Microsoft Azure Client Library for Python (Common)"
+optional = false
+python-versions = "*"
+files = [
+    {file = "azure-common-1.1.28.zip", hash = "sha256:4ac0cd3214e36b6a1b6a442686722a5d8cc449603aa833f3f0f40bda836704a3"},
+    {file = "azure_common-1.1.28-py2.py3-none-any.whl", hash = "sha256:5c12d3dcf4ec20599ca6b0d3e09e86e146353d443e7fcc050c9a19c1f9df20ad"},
+]
+
+[[package]]
+name = "azure-core"
+version = "1.36.0"
+description = "Microsoft Azure Core Library for Python"
+optional = false
+python-versions = ">=3.9"
+files = [
+    {file = "azure_core-1.36.0-py3-none-any.whl", hash = "sha256:fee9923a3a753e94a259563429f3644aaf05c486d45b1215d098115102d91d3b"},
+    {file = "azure_core-1.36.0.tar.gz", hash = "sha256:22e5605e6d0bf1d229726af56d9e92bc37b6e726b141a18be0b4d424131741b7"},
+]
+
+[package.dependencies]
+requests = ">=2.21.0"
+typing-extensions = ">=4.6.0"
+
+[package.extras]
+aio = ["aiohttp (>=3.0)"]
+tracing = ["opentelemetry-api (>=1.26,<2.0)"]
+
+[[package]]
+name = "azure-identity"
+version = "1.25.1"
+description = "Microsoft Azure Identity Library for Python"
+optional = false
+python-versions = ">=3.9"
+files = [
+    {file = "azure_identity-1.25.1-py3-none-any.whl", hash = "sha256:e9edd720af03dff020223cd269fa3a61e8f345ea75443858273bcb44844ab651"},
+    {file = "azure_identity-1.25.1.tar.gz", hash = "sha256:87ca8328883de6036443e1c37b40e8dc8fb74898240f61071e09d2e369361456"},
+]
+
+[package.dependencies]
+azure-core = ">=1.31.0"
+cryptography = ">=2.5"
+msal = ">=1.30.0"
+msal-extensions = ">=1.2.0"
+typing-extensions = ">=4.0.0"
+
+[[package]]
+name = "azure-mgmt-authorization"
+version = "4.0.0"
+description = "Microsoft Azure Authorization Management Client Library for Python"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "azure-mgmt-authorization-4.0.0.zip", hash = "sha256:69b85abc09ae64fc72975bd43431170d8c7eb5d166754b98aac5f3845de57dc4"},
+    {file = "azure_mgmt_authorization-4.0.0-py3-none-any.whl", hash = "sha256:d8feeb3842e6ddf1a370963ca4f61fb6edc124e8997b807dd025bc9b2379cd1a"},
+]
+
+[package.dependencies]
+azure-common = ">=1.1,<2.0"
+azure-mgmt-core = ">=1.3.2,<2.0.0"
+isodate = ">=0.6.1,<1.0.0"
+
+[[package]]
+name = "azure-mgmt-cognitiveservices"
+version = "13.7.0"
+description = "Microsoft Azure Cognitive Services Management Client Library for Python"
+optional = false
+python-versions = ">=3.9"
+files = [
+    {file = "azure_mgmt_cognitiveservices-13.7.0-py3-none-any.whl", hash = "sha256:9683c436781b8294fe85410da4d22323128c3d68bc141196addbdf07b048dfb4"},
+    {file = "azure_mgmt_cognitiveservices-13.7.0.tar.gz", hash = "sha256:48a5a44c15c6768bad238011aaac83a806ceb8ace1b51b8043e35b39a9167a19"},
+]
+
+[package.dependencies]
+azure-common = ">=1.1"
+azure-mgmt-core = ">=1.5.0"
+isodate = ">=0.6.1"
+typing-extensions = ">=4.6.0"
+
+[[package]]
+name = "azure-mgmt-core"
+version = "1.6.0"
+description = "Microsoft Azure Management Core Library for Python"
+optional = false
+python-versions = ">=3.9"
+files = [
+    {file = "azure_mgmt_core-1.6.0-py3-none-any.whl", hash = "sha256:0460d11e85c408b71c727ee1981f74432bc641bb25dfcf1bb4e90a49e776dbc4"},
+    {file = "azure_mgmt_core-1.6.0.tar.gz", hash = "sha256:b26232af857b021e61d813d9f4ae530465255cb10b3dde945ad3743f7a58e79c"},
+]
+
+[package.dependencies]
+azure-core = ">=1.32.0"
+
+[[package]]
+name = "azure-mgmt-resource"
+version = "23.4.0"
+description = "Microsoft Azure Resource Management Client Library for Python"
+optional = false
+python-versions = ">=3.9"
+files = [
+    {file = "azure_mgmt_resource-23.4.0-py3-none-any.whl", hash = "sha256:17282d20dc643fb68a286c2c350a191dc3bf386827f65a7daeeb714367a19316"},
+    {file = "azure_mgmt_resource-23.4.0.tar.gz", hash = "sha256:7cc0909184bd01439e245f5f2e20945a3668d45a6774e1f008227bb33a733d16"},
+]
+
+[package.dependencies]
+azure-common = ">=1.1"
+azure-mgmt-core = ">=1.5.0"
+isodate = ">=0.6.1"
+typing-extensions = ">=4.6.0"
+
+[[package]]
 name = "black"
 version = "23.12.1"
 description = "The uncompromising code formatter."
@@ -687,6 +799,17 @@ files = [
 ]
 
 [[package]]
+name = "isodate"
+version = "0.7.2"
+description = "An ISO 8601 date/time/duration parser and formatter"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "isodate-0.7.2-py3-none-any.whl", hash = "sha256:28009937d8031054830160fce6d409ed342816b543597cece116d966c6d99e15"},
+    {file = "isodate-0.7.2.tar.gz", hash = "sha256:4cd1aa0f43ca76f4a6c6c0292a85f40b35ec2e43e315b59f06e6d32171a953e6"},
+]
+
+[[package]]
 name = "msal"
 version = "1.34.0"
 description = "The Microsoft Authentication Library (MSAL) for Python library enables your app to access the Microsoft Cloud by supporting authentication of users with Microsoft Azure Active Directory accounts (AAD) and Microsoft Accounts (MSA) using industry standard OAuth2 and OpenID Connect."
@@ -704,6 +827,23 @@ requests = ">=2.0.0,<3"
 
 [package.extras]
 broker = ["pymsalruntime (>=0.14,<0.19)", "pymsalruntime (>=0.17,<0.19)", "pymsalruntime (>=0.18,<0.19)"]
+
+[[package]]
+name = "msal-extensions"
+version = "1.3.1"
+description = "Microsoft Authentication Library extensions (MSAL EX) provides a persistence API that can save your data on disk, encrypted on Windows, macOS and Linux. Concurrent data access will be coordinated by a file lock mechanism."
+optional = false
+python-versions = ">=3.9"
+files = [
+    {file = "msal_extensions-1.3.1-py3-none-any.whl", hash = "sha256:96d3de4d034504e969ac5e85bae8106c8373b5c6568e4c8fa7af2eca9dbe6bca"},
+    {file = "msal_extensions-1.3.1.tar.gz", hash = "sha256:c5b0fd10f65ef62b5f1d62f4251d51cbcaf003fcedae8c91b040a488614be1a4"},
+]
+
+[package.dependencies]
+msal = ">=1.29,<2"
+
+[package.extras]
+portalocker = ["portalocker (>=1.4,<4)"]
 
 [[package]]
 name = "mypy-extensions"
@@ -1603,4 +1743,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "8b946371f2d18c5cb6bcdafa7226d804bdd02ade6bd804147b67e8da3cde48d0"
+content-hash = "74de68c9b065b60a0bcfb301cc99b0d1fa26d2d90a3266036025bfa041d3b878"

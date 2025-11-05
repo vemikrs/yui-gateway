@@ -28,7 +28,7 @@ YuiGateway は Azure OpenAI に Entra ID (Azure AD) 認証で安全に接続す�
   ```bash
   # Poetry のインストール
   curl -sSL https://install.python-poetry.org | python3 -
-  
+
   # または pip を使用
   pip install poetry
   ```
@@ -92,12 +92,32 @@ pip install fastapi uvicorn[standard] msal httpx pydantic-settings python-dotenv
 
 ### 3. 設定ファイルの準備
 
+最も簡単なのは Azure SDK を使った全自動プロビジョニングです。Entra にサインイン済みであれば（`az login`）、アプリ登録の作成、クライアントシークレット発行、サービスプリンシパル作成、Azure OpenAI リソースへの RBAC 付与、`.env` 生成まで一括で行います。
+
 ```bash
-# テンプレートをコピー
-cp .env.template .env
+python scripts/provision_env.py
 ```
 
-`.env` ファイルを編集して、Azure の認証情報を設定します:
+特定のリソースを明示したい場合:
+
+```bash
+python scripts/provision_env.py \
+  --subscription-id <SUBSCRIPTION_ID> \
+  --resource-group <RESOURCE_GROUP> \
+  --account-name <AZURE_OPENAI_ACCOUNT_NAME> \
+  --app-name YuiGateway-App
+```
+
+- 既定の `SCOPE` は `https://cognitiveservices.azure.com/.default` です。
+- 十分な権限（アプリ登録の作成権限 + 対象リソースへの RBAC 付与権限）が必要です。
+
+権限や運用上の理由でプロビジョニングを行いたくない場合は、`.env` の自動編集のみ行う簡易スクリプトも利用できます:
+
+```bash
+python scripts/setup_env.py
+```
+
+手動で設定する場合は、プロジェクト直下に `.env` を作成し、以下のキーを設定してください:
 
 ```env
 # Azure AD (Entra ID) 認証情報
