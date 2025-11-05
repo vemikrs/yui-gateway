@@ -15,6 +15,19 @@
       }
     },
     {
+      "label": "Verify Entra Auth",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": [
+        "scripts/verify_auth.py"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
       "label": "Setup .env (simple)",
       "type": "shell",
       "command": "${workspaceFolder}/.venv/bin/python",
