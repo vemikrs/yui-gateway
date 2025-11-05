@@ -4,11 +4,13 @@ OpenAI 互換のリクエストを受け取り、Azure OpenAI API 形式に変�
 レスポンスをそのままクライアントに返却する。
 """
 
-import httpx
-from typing import Dict, Any, Optional
-from gateway.settings import settings
-from gateway import auth
 import logging
+from typing import Any
+
+import httpx
+
+from gateway import auth
+from gateway.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +28,7 @@ class AzureOpenAIProxy:
         self.client = httpx.AsyncClient(timeout=120.0)
         logger.info(f"AzureOpenAIProxy initialized for endpoint: {self.endpoint}")
 
-    async def chat_completion(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def chat_completion(self, request_data: dict[str, Any]) -> dict[str, Any]:
         """チャット補完リクエストを Azure OpenAI に転送
 
         Args:
@@ -58,9 +60,7 @@ class AzureOpenAIProxy:
         }
 
         # API バージョンをクエリパラメータに追加
-        params = {
-            "api-version": "2024-02-15-preview"
-        }
+        params = {"api-version": "2024-02-15-preview"}
 
         logger.info(f"Forwarding request to Azure OpenAI: {deployment_name}")
         logger.debug(f"Request URL: {url}")
@@ -68,10 +68,7 @@ class AzureOpenAIProxy:
         try:
             # リクエストを転送
             response = await self.client.post(
-                url,
-                json=request_data,
-                headers=headers,
-                params=params
+                url, json=request_data, headers=headers, params=params
             )
 
             # エラーチェック
@@ -83,7 +80,9 @@ class AzureOpenAIProxy:
             return result
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"Azure OpenAI returned error: {e.response.status_code} - {e.response.text}")
+            logger.error(
+                f"Azure OpenAI returned error: {e.response.status_code} - {e.response.text}"
+            )
             raise
         except Exception as e:
             logger.error(f"Failed to forward request: {str(e)}")
@@ -95,7 +94,7 @@ class AzureOpenAIProxy:
 
 
 # シングルトンインスタンス（遅延初期化）
-_proxy_instance: Optional[AzureOpenAIProxy] = None
+_proxy_instance: AzureOpenAIProxy | None = None
 
 
 def get_proxy() -> AzureOpenAIProxy:

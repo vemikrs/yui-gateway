@@ -4,18 +4,17 @@ OpenAI API 互換のエンドポイントを提供する FastAPI アプリケー
 クライアントは標準的な OpenAI ライブラリで接続可能。
 """
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
-from typing import Dict, Any, List, Optional
-from pydantic import BaseModel
 import logging
+from typing import Any
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 from gateway import azure_proxy
 
 # ロギング設定
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -23,32 +22,36 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="YuiGateway",
     description="Entra ID-based local proxy to Azure OpenAI",
-    version="0.1.0"
+    version="0.1.0",
 )
 
 
 # === Pydantic モデル定義 ===
 
+
 class Message(BaseModel):
     """チャットメッセージ"""
+
     role: str
     content: str
 
 
 class ChatCompletionRequest(BaseModel):
     """チャット補完リクエスト（OpenAI 互換）"""
+
     model: str
-    messages: List[Message]
-    temperature: Optional[float] = 1.0
-    top_p: Optional[float] = 1.0
-    n: Optional[int] = 1
-    stream: Optional[bool] = False
-    max_tokens: Optional[int] = None
-    presence_penalty: Optional[float] = 0.0
-    frequency_penalty: Optional[float] = 0.0
+    messages: list[Message]
+    temperature: float | None = 1.0
+    top_p: float | None = 1.0
+    n: int | None = 1
+    stream: bool | None = False
+    max_tokens: int | None = None
+    presence_penalty: float | None = 0.0
+    frequency_penalty: float | None = 0.0
 
 
 # === エンドポイント ===
+
 
 @app.get("/")
 async def root():
@@ -57,7 +60,7 @@ async def root():
         "service": "YuiGateway",
         "version": "0.1.0",
         "description": "Entra ID-based local proxy to Azure OpenAI",
-        "endpoints": ["/v1/chat/completions"]
+        "endpoints": ["/v1/chat/completions"],
     }
 
 
@@ -68,7 +71,7 @@ async def health():
 
 
 @app.post("/v1/chat/completions")
-async def chat_completions(request: ChatCompletionRequest) -> Dict[str, Any]:
+async def chat_completions(request: ChatCompletionRequest) -> dict[str, Any]:
     """チャット補完エンドポイント（OpenAI 互換）
 
     OpenAI API の /v1/chat/completions と同じインターフェースを提供。
@@ -97,9 +100,8 @@ async def chat_completions(request: ChatCompletionRequest) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error processing chat completion: {str(e)}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to process request: {str(e)}"
-        )
+            status_code=500, detail=f"Failed to process request: {str(e)}"
+        ) from e
 
 
 @app.on_event("shutdown")

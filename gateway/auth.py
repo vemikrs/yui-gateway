@@ -6,10 +6,11 @@ Microsoft Authentication Library (MSAL) を使用して、
 トークンはキャッシュされ、期限切れ時に自動更新される。
 """
 
-from msal import ConfidentialClientApplication
-from gateway.settings import settings
-from typing import Optional
 import logging
+
+from msal import ConfidentialClientApplication
+
+from gateway.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +29,13 @@ class EntraIDAuthenticator:
         self.app = ConfidentialClientApplication(
             client_id=settings.client_id,
             client_credential=settings.client_secret,
-            authority=authority
+            authority=authority,
         )
 
         self.scope = [settings.scope]
-        logger.info(f"EntraIDAuthenticator initialized for tenant: {settings.tenant_id}")
+        logger.info(
+            f"EntraIDAuthenticator initialized for tenant: {settings.tenant_id}"
+        )
 
     def get_token(self) -> str:
         """アクセストークンを取得
@@ -56,13 +59,15 @@ class EntraIDAuthenticator:
             logger.debug("Token acquired successfully")
             return result["access_token"]
         else:
-            error_msg = result.get("error_description", result.get("error", "Unknown error"))
+            error_msg = result.get(
+                "error_description", result.get("error", "Unknown error")
+            )
             logger.error(f"Failed to acquire token: {error_msg}")
             raise Exception(f"Token acquisition failed: {error_msg}")
 
 
 # シングルトンインスタンス（遅延初期化）
-_authenticator_instance: Optional[EntraIDAuthenticator] = None
+_authenticator_instance: EntraIDAuthenticator | None = None
 
 
 def get_authenticator() -> EntraIDAuthenticator:
