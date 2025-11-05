@@ -111,10 +111,22 @@ python scripts/provision_env.py \
 - 既定の `SCOPE` は `https://cognitiveservices.azure.com/.default` です。
 - 十分な権限（アプリ登録の作成権限 + 対象リソースへの RBAC 付与権限）が必要です。
 
+VS Code のタスクからも実行できます（推奨）:
+
+```bash
+# コマンドパレット → "Tasks: Run Task" → "Provision .env (Azure SDK)"
+```
+
 権限や運用上の理由でプロビジョニングを行いたくない場合は、`.env` の自動編集のみ行う簡易スクリプトも利用できます:
 
 ```bash
 python scripts/setup_env.py
+```
+
+VS Code のタスクからも実行可能:
+
+```bash
+# コマンドパレット → "Tasks: Run Task" → "Setup .env (simple)"
 ```
 
 手動で設定する場合は、プロジェクト直下に `.env` を作成し、以下のキーを設定してください:
@@ -159,6 +171,10 @@ AZURE_OPENAI_ENDPOINT=https://your-resource-name.openai.azure.com
 ### 方法 1: スクリプトを使用
 
 ```bash
+# 自動プロビジョニングを許可して起動（.env が無い場合）
+AUTO_PROVISION=1 bash scripts/start_local.sh
+
+# 既に .env がある場合は通常起動
 bash scripts/start_local.sh
 ```
 
