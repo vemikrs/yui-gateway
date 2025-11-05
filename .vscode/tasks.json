@@ -2,11 +2,29 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Provision .env (Azure SDK)",
+      "label": "Provision .env (Interactive)",
       "type": "shell",
       "command": "${workspaceFolder}/.venv/bin/python",
       "args": [
-        "scripts/provision_env.py"
+        "scripts/provision_env.py",
+        "--login",
+        "interactive",
+        "--select"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Provision .env (CLI)",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": [
+        "scripts/provision_env.py",
+        "--login",
+        "cli"
       ],
       "problemMatcher": [],
       "presentation": {
@@ -43,14 +61,10 @@
     {
       "label": "Start YuiGateway Server",
       "type": "shell",
-      "command": "${workspaceFolder}/.venv/bin/uvicorn",
+      "command": "/usr/bin/env",
       "args": [
-        "gateway.routes:app",
-        "--reload",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "8000"
+        "bash",
+        "scripts/start_local.sh"
       ],
       "problemMatcher": [],
       "presentation": {
@@ -148,19 +162,6 @@
       "label": "Install Dependencies",
       "type": "shell",
       "command": "poetry",
-      "args": [
-        "install"
-      ],
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "Install Pre-commit Hooks",
-      "type": "shell",
-      "command": "${workspaceFolder}/.venv/bin/pre-commit",
       "args": [
         "install"
       ],

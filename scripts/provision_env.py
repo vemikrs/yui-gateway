@@ -36,7 +36,11 @@ from typing import Iterable, List, Optional, Tuple
 from uuid import uuid4
 
 import httpx
-from azure.identity import DefaultAzureCredential
+from azure.identity import (
+    DefaultAzureCredential,
+    AzureCliCredential,
+    InteractiveBrowserCredential,
+)
 from azure.mgmt.authorization import AuthorizationManagementClient
 from azure.mgmt.authorization.models import RoleAssignmentCreateParameters
 from azure.mgmt.cognitiveservices import CognitiveServicesManagementClient
@@ -56,9 +60,17 @@ class OpenAIAccount:
     endpoint: str
 
 
-def get_credential() -> DefaultAzureCredential:
-    # DefaultAzureCredential will use Azure CLI token when available (recommended for dev)
-    return DefaultAzureCredential(exclude_interactive_browser_credential=True)
+def get_credential():
+    """Return a credential according to desired login mode.
+
+    Mode is determined by env var `YUI_LOGIN_MODE` in {interactive|cli|default}.
+    """
+    mode = (os.getenv("YUI_LOGIN_MODE") or "default").lower()
+    if mode == "interactive":
+        return InteractiveBrowserCredential()
+    if mode == "cli":
+        return AzureCliCredential()
+    return DefaultAzureCredential()
 
 
 async def graph_request(
@@ -86,7 +98,7 @@ async def get_tenant_id(credential: DefaultAzureCredential) -> str:
         return orgs[0]["id"]
 
 
-def list_openai_accounts(credential: DefaultAzureCredential) -> List[OpenAIAccount]:
+def list_openai_accounts(credential) -> List[OpenAIAccount]:
     accounts: List[OpenAIAccount] = []
     sub_client = SubscriptionClient(credential)
     for sub in sub_client.subscriptions.list():
@@ -114,7 +126,7 @@ def list_openai_accounts(credential: DefaultAzureCredential) -> List[OpenAIAccou
 
 
 def resolve_account(
-    credential: DefaultAzureCredential,
+    credential,
     subscription_id: Optional[str],
     resource_group: Optional[str],
     account_name: Optional[str],
@@ -134,6 +146,35 @@ def resolve_account(
     if not accounts:
         raise RuntimeError("Azure OpenAI リソースが見つかりません。--subscription-id/--resource-group/--account-name を指定してください。")
     # Prefer single; if multiple, pick the first for non-interactive simplicity
+    return accounts[0]
+
+
+def select_account_interactive(accounts: List[OpenAIAccount]) -> OpenAIAccount:
+    print("複数の Azure OpenAI リソースが見つかりました。番号を選択してください:\n")
+    for i, a in enumerate(accounts):
+        print(f"[{i}] sub={a.subscription_id} rg={a.resource_group} name={a.name} endpoint={a.endpoint}")
+    while True:
+        idx = input("選択番号: ").strip()
+        if idx.isdigit() and 0 <= int(idx) < len(accounts):
+            return accounts[int(idx)]
+        print("無効な入力です。もう一度入力してください。")
+
+
+def resolve_account_with_selection(
+    credential,
+    subscription_id: Optional[str],
+    resource_group: Optional[str],
+    account_name: Optional[str],
+    enable_select: bool,
+) -> OpenAIAccount:
+    """Resolve account; optionally prompt user when multiple are found."""
+    if subscription_id and resource_group and account_name:
+        return resolve_account(credential, subscription_id, resource_group, account_name)
+    accounts = list_openai_accounts(credential)
+    if not accounts:
+        raise RuntimeError("Azure OpenAI リソースが見つかりません。ポータルで作成してから再実行してください。")
+    if enable_select and len(accounts) > 1:
+        return select_account_interactive(accounts)
     return accounts[0]
 
 
@@ -264,16 +305,35 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--account-name")
     p.add_argument("--app-name", default="YuiGateway-App")
     p.add_argument("--scope", default="https://cognitiveservices.azure.com/.default")
+    p.add_argument(
+        "--login",
+        choices=["default", "cli", "interactive"],
+        default="default",
+        help="認証方法を指定 (interactive でブラウザログイン)",
+    )
+    p.add_argument(
+        "--select",
+        action="store_true",
+        help="複数リソースがある場合に対話的に選択する",
+    )
     return p.parse_args(argv)
 
 
 async def main(argv: List[str]) -> int:
     args = parse_args(argv)
+    # pass login preference to get_credential via env for test compatibility
+    os.environ["YUI_LOGIN_MODE"] = args.login
     cred = get_credential()
 
     # Discover tenant and OpenAI endpoint
     tenant_id = await get_tenant_id(cred)
-    acct = resolve_account(cred, args.subscription_id, args.resource_group, args.account_name)
+    # Keep tests compatible: default to using resolve_account; use wrapper only when selection enabled
+    if args.select:
+        acct = resolve_account_with_selection(
+            cred, args.subscription_id, args.resource_group, args.account_name, True
+        )
+    else:
+        acct = resolve_account(cred, args.subscription_id, args.resource_group, args.account_name)
 
     # Create App + Secret + SP
     app_obj_id, client_id, client_secret = await ensure_application(cred, args.app_name)
