@@ -40,6 +40,7 @@ from azure.identity import (
     DefaultAzureCredential,
     AzureCliCredential,
     InteractiveBrowserCredential,
+    DeviceCodeCredential,
 )
 from azure.mgmt.authorization import AuthorizationManagementClient
 from azure.mgmt.authorization.models import RoleAssignmentCreateParameters
@@ -70,6 +71,8 @@ def get_credential():
         return InteractiveBrowserCredential()
     if mode == "cli":
         return AzureCliCredential()
+    if mode == "devicecode":
+        return DeviceCodeCredential()
     return DefaultAzureCredential()
 
 
@@ -87,7 +90,7 @@ def get_tenant_id_from_token(token: str) -> Optional[str]:
 
 
 async def get_tenant_id(credential: DefaultAzureCredential) -> str:
-    token = (await credential.get_token("https://graph.microsoft.com/.default")).token
+    token = credential.get_token("https://graph.microsoft.com/.default").token
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await graph_request(client, "GET", "https://graph.microsoft.com/v1.0/organization", token)
         resp.raise_for_status()
@@ -188,7 +191,7 @@ async def ensure_application(
     - client_id: App ID (aka application (client) ID)
     - client_secret: Newly created secret value
     """
-    token = (await credential.get_token("https://graph.microsoft.com/.default")).token
+    token = credential.get_token("https://graph.microsoft.com/.default").token
     async with httpx.AsyncClient(timeout=60) as client:
         # Try to find existing application by displayName
         url = "https://graph.microsoft.com/v1.0/applications?$select=id,appId,displayName&$filter=" \
@@ -225,7 +228,7 @@ async def ensure_service_principal(
     credential: DefaultAzureCredential, client_id: str
 ) -> str:
     """Ensure Service Principal exists for the application; returns SP object id."""
-    token = (await credential.get_token("https://graph.microsoft.com/.default")).token
+    token = credential.get_token("https://graph.microsoft.com/.default").token
     async with httpx.AsyncClient(timeout=60) as client:
         # Find existing
         url = (
@@ -307,9 +310,9 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--scope", default="https://cognitiveservices.azure.com/.default")
     p.add_argument(
         "--login",
-        choices=["default", "cli", "interactive"],
+        choices=["default", "cli", "interactive", "devicecode"],
         default="default",
-        help="認証方法を指定 (interactive でブラウザログイン)",
+        help="認証方法を指定 (interactive/cli/devicecode)",
     )
     p.add_argument(
         "--select",
