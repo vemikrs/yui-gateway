@@ -2,10 +2,14 @@
 
 OpenAI API 互換のエンドポイントを提供する FastAPI アプリケーション。
 クライアントは標準的な OpenAI ライブラリで接続可能。
+
+Why: FastAPI の `on_event` は非推奨のため、アプリのライフサイクル管理は
+lifespan ハンドラに移行する（2025 互換性対応）。
 """
 
 import logging
 from typing import Any
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -18,11 +22,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# FastAPI アプリケーション
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """App lifespan handler for startup/shutdown cleanup.
+
+    Why: `on_event` は非推奨のため、終了時のクリーンアップをここで実施する。
+    起動時は特別な初期化を行っていないため、yield 前は何もしない。
+    """
+    # Startup phase
+    yield
+    # Shutdown phase
+    logger.info("Shutting down YuiGateway")
+    inst = getattr(azure_proxy, "_proxy_instance", None)
+    if inst is not None:
+        await inst.close()
+
+
+# FastAPI アプリケーション（lifespan 対応）
 app = FastAPI(
     title="YuiGateway",
     description="Entra ID-based local proxy to Azure OpenAI",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 
@@ -104,8 +125,13 @@ async def chat_completions(request: ChatCompletionRequest) -> dict[str, Any]:
         ) from e
 
 
-@app.on_event("shutdown")
 async def shutdown_event():
-    """アプリケーション終了時のクリーンアップ"""
-    logger.info("Shutting down YuiGateway")
-    await azure_proxy.get_proxy().close()
+    """Backward-compatible shutdown hook for tests.
+
+    Why: 既存のユニットテストが `shutdown_event` を直接呼ぶため、
+    lifespan 置換後も互換APIとして残す。
+    """
+    proxy = azure_proxy.get_proxy()
+    await proxy.close()
+
+# 旧 on_event("shutdown") は lifespan に置換済み
