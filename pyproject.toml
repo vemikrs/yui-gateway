@@ -2,7 +2,7 @@
 name = "yui-gateway"
 version = "0.1.0"
 description = "Entra ID-based local proxy to Azure OpenAI"
-authors = ["you@example.com"]
+authors = ["YuiGateway Team <vemikrs@users.noreply.github.com>"]
 packages = [{include = "gateway"}]
 
 [tool.poetry.dependencies]
