@@ -31,6 +31,7 @@ import json
 import os
 import sys
 from dataclasses import dataclass
+import re
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
 from uuid import uuid4
@@ -130,9 +131,15 @@ def select_tenant_interactive(tenants: List[dict]) -> str:
     for i, t in enumerate(tenants):
         print(f"[{i}] {t.get('name')} ({t.get('id')})")
     while True:
-        idx = input("選択番号: ").strip()
-        if idx.isdigit() and 0 <= int(idx) < len(tenants):
-            return tenants[int(idx)]["id"]
+        raw = input("選択番号 (Enterで0): ")
+        s = (raw or "").strip()
+        if s == "":
+            return tenants[0]["id"]
+        m = re.search(r"\d+", s)
+        if m:
+            val = int(m.group(0))
+            if 0 <= val < len(tenants):
+                return tenants[val]["id"]
         print("無効な入力です。もう一度入力してください。")
 
 
@@ -192,9 +199,15 @@ def select_account_interactive(accounts: List[OpenAIAccount]) -> OpenAIAccount:
     for i, a in enumerate(accounts):
         print(f"[{i}] sub={a.subscription_id} rg={a.resource_group} name={a.name} endpoint={a.endpoint}")
     while True:
-        idx = input("選択番号: ").strip()
-        if idx.isdigit() and 0 <= int(idx) < len(accounts):
-            return accounts[int(idx)]
+        raw = input("選択番号 (Enterで0): ")
+        s = (raw or "").strip()
+        if s == "":
+            return accounts[0]
+        m = re.search(r"\d+", s)
+        if m:
+            val = int(m.group(0))
+            if 0 <= val < len(accounts):
+                return accounts[val]
         print("無効な入力です。もう一度入力してください。")
 
 
