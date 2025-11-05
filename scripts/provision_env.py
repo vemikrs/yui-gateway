@@ -149,24 +149,73 @@ def list_openai_accounts(credential) -> List[OpenAIAccount]:
     for sub in sub_client.subscriptions.list():
         sub_id = sub.subscription_id
         cog_client = CognitiveServicesManagementClient(credential, sub_id)
-        for acct in cog_client.accounts.list():
-            try:
-                kind = getattr(acct, "kind", "") or ""
-                # Azure OpenAI accounts have kind "OpenAI"
-                if kind.lower() != "openai":
-                    continue
-                rg = acct.id.split("/resourceGroups/")[1].split("/")[0]
-                accounts.append(
-                    OpenAIAccount(
-                        subscription_id=sub_id,
-                        resource_group=rg,
-                        name=acct.name,
-                        id=acct.id,
-                        endpoint=acct.properties.endpoint,
+        found_any = False
+        try:
+            for acct in cog_client.accounts.list():
+                try:
+                    kind = getattr(acct, "kind", "") or ""
+                    if kind.lower() != "openai":
+                        continue
+                    rg = acct.id.split("/resourceGroups/")[1].split("/")[0]
+                    accounts.append(
+                        OpenAIAccount(
+                            subscription_id=sub_id,
+                            resource_group=rg,
+                            name=acct.name,
+                            id=acct.id,
+                            endpoint=acct.properties.endpoint,
+                        )
                     )
-                )
+                    found_any = True
+                except Exception:
+                    continue
+        except Exception:
+            # SDK list may fail due to older api-version; fall back to REST below
+            pass
+
+        # REST fallback (authoritative API version)
+        if not found_any:
+            try:
+                token = credential.get_token("https://management.azure.com/.default").token
+                url = f"https://management.azure.com/subscriptions/{sub_id}/providers/Microsoft.CognitiveServices/accounts?api-version=2024-10-01"
+                async def _fetch_all(u: str) -> List[dict]:
+                    out: List[dict] = []
+                    async with httpx.AsyncClient(timeout=60) as client:
+                        next_url = u
+                        while next_url:
+                            resp = await client.get(next_url, headers={"Authorization": f"Bearer {token}"})
+                            resp.raise_for_status()
+                            data = resp.json()
+                            out.extend(data.get("value", []))
+                            next_url = data.get("nextLink")
+                    return out
+                # Run the coroutine synchronously since we are in sync function
+                import asyncio as _asyncio
+                items = _asyncio.get_event_loop().run_until_complete(_fetch_all(url))
+                for it in items:
+                    try:
+                        kind = (it.get("kind") or "").lower()
+                        if kind != "openai":
+                            continue
+                        rid = it.get("id")
+                        rg = rid.split("/resourceGroups/")[1].split("/")[0] if rid else ""
+                        name = it.get("name")
+                        endpoint = (((it.get("properties") or {}).get("endpoint")) or "")
+                        if rid and name and endpoint:
+                            accounts.append(
+                                OpenAIAccount(
+                                    subscription_id=sub_id,
+                                    resource_group=rg,
+                                    name=name,
+                                    id=rid,
+                                    endpoint=endpoint,
+                                )
+                            )
+                    except Exception:
+                        continue
             except Exception:
-                continue
+                # Ignore REST fallback failure; will return what we have
+                pass
     return accounts
 
 
