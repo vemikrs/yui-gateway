@@ -3,8 +3,9 @@
 Tests Entra ID (Azure AD) token acquisition using MSAL.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
 
 
 class TestEntraIDAuthenticator:
@@ -21,7 +22,7 @@ class TestEntraIDAuthenticator:
             mock_app_class.assert_called_once_with(
                 client_id=mock_settings.client_id,
                 client_credential=mock_settings.client_secret,
-                authority=f"https://login.microsoftonline.com/{mock_settings.tenant_id}"
+                authority=f"https://login.microsoftonline.com/{mock_settings.tenant_id}",
             )
 
             # Verify scope was set
@@ -31,12 +32,11 @@ class TestEntraIDAuthenticator:
         """Test successful token retrieval from cache"""
         with patch("gateway.auth.ConfidentialClientApplication") as mock_app_class:
             mock_app = MagicMock()
-            mock_app.acquire_token_silent.return_value = {
-                "access_token": mock_token
-            }
+            mock_app.acquire_token_silent.return_value = {"access_token": mock_token}
             mock_app_class.return_value = mock_app
 
             from gateway.auth import EntraIDAuthenticator
+
             authenticator = EntraIDAuthenticator()
 
             token = authenticator.get_token()
@@ -59,6 +59,7 @@ class TestEntraIDAuthenticator:
             mock_app_class.return_value = mock_app
 
             from gateway.auth import EntraIDAuthenticator
+
             authenticator = EntraIDAuthenticator()
 
             token = authenticator.get_token()
@@ -77,11 +78,12 @@ class TestEntraIDAuthenticator:
             # Simulate authentication failure
             mock_app.acquire_token_for_client.return_value = {
                 "error": "invalid_client",
-                "error_description": "Invalid client credentials"
+                "error_description": "Invalid client credentials",
             }
             mock_app_class.return_value = mock_app
 
             from gateway.auth import EntraIDAuthenticator
+
             authenticator = EntraIDAuthenticator()
 
             with pytest.raises(Exception) as exc_info:
@@ -101,6 +103,7 @@ class TestEntraIDAuthenticator:
             mock_app_class.return_value = mock_app
 
             from gateway.auth import EntraIDAuthenticator
+
             authenticator = EntraIDAuthenticator()
 
             with pytest.raises(Exception) as exc_info:
@@ -110,7 +113,7 @@ class TestEntraIDAuthenticator:
 
     def test_singleton_authenticator_exists(self, mock_settings):
         """Test that singleton authenticator instance is available"""
-        with patch("gateway.auth.ConfidentialClientApplication") as mock_app_class:
+        with patch("gateway.auth.ConfidentialClientApplication"):
             from gateway.auth import get_authenticator
 
             authenticator = get_authenticator()
@@ -124,12 +127,11 @@ class TestEntraIDAuthenticator:
         """Test that get_token returns a string token"""
         with patch("gateway.auth.ConfidentialClientApplication") as mock_app_class:
             mock_app = MagicMock()
-            mock_app.acquire_token_silent.return_value = {
-                "access_token": mock_token
-            }
+            mock_app.acquire_token_silent.return_value = {"access_token": mock_token}
             mock_app_class.return_value = mock_app
 
             from gateway.auth import EntraIDAuthenticator
+
             authenticator = EntraIDAuthenticator()
 
             token = authenticator.get_token()

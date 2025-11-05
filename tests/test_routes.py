@@ -3,16 +3,17 @@
 Tests FastAPI endpoints and request/response handling.
 """
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from fastapi.testclient import TestClient
-import httpx
 
 
 @pytest.fixture
 def client():
     """FastAPI test client"""
     from gateway.routes import app
+
     return TestClient(app)
 
 
@@ -61,7 +62,9 @@ class TestHealthEndpoint:
 class TestChatCompletionsEndpoint:
     """Tests for /v1/chat/completions endpoint"""
 
-    def test_chat_completions_success(self, client, sample_chat_request, sample_chat_response):
+    def test_chat_completions_success(
+        self, client, sample_chat_request, sample_chat_response
+    ):
         """Test successful chat completion request"""
         with patch("gateway.routes.azure_proxy.get_proxy") as mock_get_proxy:
             mock_proxy = MagicMock()
@@ -76,7 +79,10 @@ class TestChatCompletionsEndpoint:
             data = response.json()
 
             assert data == sample_chat_response
-            assert data["choices"][0]["message"]["content"] == "Hello! How can I help you today?"
+            assert (
+                data["choices"][0]["message"]["content"]
+                == "Hello! How can I help you today?"
+            )
 
             # Verify proxy was called with correct data
             mock_chat.assert_called_once()
@@ -94,7 +100,7 @@ class TestChatCompletionsEndpoint:
             "top_p": 0.9,
             "presence_penalty": 0.1,
             "frequency_penalty": 0.2,
-            "n": 1
+            "n": 1,
         }
 
         with patch("gateway.routes.azure_proxy.get_proxy") as mock_get_proxy:
@@ -116,9 +122,7 @@ class TestChatCompletionsEndpoint:
 
     def test_chat_completions_missing_model_field(self, client):
         """Test that missing model field returns validation error"""
-        invalid_request = {
-            "messages": [{"role": "user", "content": "Test"}]
-        }
+        invalid_request = {"messages": [{"role": "user", "content": "Test"}]}
 
         response = client.post("/v1/chat/completions", json=invalid_request)
 
@@ -126,9 +130,7 @@ class TestChatCompletionsEndpoint:
 
     def test_chat_completions_missing_messages_field(self, client):
         """Test that missing messages field returns validation error"""
-        invalid_request = {
-            "model": "gpt-4"
-        }
+        invalid_request = {"model": "gpt-4"}
 
         response = client.post("/v1/chat/completions", json=invalid_request)
 
@@ -138,9 +140,7 @@ class TestChatCompletionsEndpoint:
         """Test that invalid message format returns validation error"""
         invalid_request = {
             "model": "gpt-4",
-            "messages": [
-                {"role": "user"}  # Missing content
-            ]
+            "messages": [{"role": "user"}],  # Missing content
         }
 
         response = client.post("/v1/chat/completions", json=invalid_request)
@@ -169,7 +169,7 @@ class TestChatCompletionsEndpoint:
             "model": "gpt-4",
             "messages": [{"role": "user", "content": "Test"}],
             "max_tokens": None,  # Should be excluded
-            "temperature": 0.7   # Should be included
+            "temperature": 0.7,  # Should be included
         }
 
         with patch("gateway.routes.azure_proxy.get_proxy") as mock_get_proxy:
@@ -215,8 +215,8 @@ class TestChatCompletionsEndpoint:
                 {"role": "system", "content": "You are helpful."},
                 {"role": "user", "content": "Hello"},
                 {"role": "assistant", "content": "Hi there!"},
-                {"role": "user", "content": "How are you?"}
-            ]
+                {"role": "user", "content": "How are you?"},
+            ],
         }
 
         with patch("gateway.routes.azure_proxy.get_proxy") as mock_get_proxy:
@@ -234,7 +234,9 @@ class TestChatCompletionsEndpoint:
             call_args = mock_chat.call_args[0][0]
             assert len(call_args["messages"]) == 4
 
-    def test_chat_completions_returns_json(self, client, sample_chat_request, sample_chat_response):
+    def test_chat_completions_returns_json(
+        self, client, sample_chat_request, sample_chat_response
+    ):
         """Test that chat completions endpoint returns JSON"""
         with patch("gateway.routes.azure_proxy.get_proxy") as mock_get_proxy:
             mock_proxy = MagicMock()
@@ -280,16 +282,18 @@ class TestMessageModel:
 
     def test_message_model_missing_role(self):
         """Test that missing role raises validation error"""
-        from gateway.routes import Message
         from pydantic import ValidationError
+
+        from gateway.routes import Message
 
         with pytest.raises(ValidationError):
             Message(content="Hello")
 
     def test_message_model_missing_content(self):
         """Test that missing content raises validation error"""
-        from gateway.routes import Message
         from pydantic import ValidationError
+
+        from gateway.routes import Message
 
         with pytest.raises(ValidationError):
             Message(role="user")
@@ -303,8 +307,7 @@ class TestChatCompletionRequestModel:
         from gateway.routes import ChatCompletionRequest
 
         req = ChatCompletionRequest(
-            model="gpt-4",
-            messages=[{"role": "user", "content": "Test"}]
+            model="gpt-4", messages=[{"role": "user", "content": "Test"}]
         )
 
         assert req.model == "gpt-4"
@@ -329,7 +332,7 @@ class TestChatCompletionRequestModel:
             stream=True,
             max_tokens=100,
             presence_penalty=0.1,
-            frequency_penalty=0.2
+            frequency_penalty=0.2,
         )
 
         assert req.temperature == 0.5

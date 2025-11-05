@@ -3,9 +3,10 @@
 Provides shared fixtures for mocking Azure AD and Azure OpenAI services.
 """
 
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, Mock
+
 import pytest
-from unittest.mock import Mock, AsyncMock, MagicMock
-from typing import Dict, Any
 
 
 @pytest.fixture
@@ -39,7 +40,9 @@ def mock_azure_endpoint() -> str:
 
 
 @pytest.fixture
-def mock_settings(mock_tenant_id, mock_client_id, mock_client_secret, mock_azure_endpoint, monkeypatch):
+def mock_settings(
+    mock_tenant_id, mock_client_id, mock_client_secret, mock_azure_endpoint, monkeypatch
+):
     """Mock settings for testing"""
     monkeypatch.setenv("TENANT_ID", mock_tenant_id)
     monkeypatch.setenv("CLIENT_ID", mock_client_id)
@@ -48,13 +51,16 @@ def mock_settings(mock_tenant_id, mock_client_id, mock_client_secret, mock_azure
     monkeypatch.setenv("SCOPE", "https://cognitiveservices.azure.com/.default")
 
     # Re-import settings to pick up new environment variables
-    from gateway import settings as settings_module
     import importlib
+
+    from gateway import settings as settings_module
+
     importlib.reload(settings_module)
 
     # Reset singleton instances for clean test state
     import gateway.auth
     import gateway.azure_proxy
+
     gateway.auth._authenticator_instance = None
     gateway.azure_proxy._proxy_instance = None
 
@@ -73,21 +79,21 @@ def mock_msal_app():
 
 
 @pytest.fixture
-def sample_chat_request() -> Dict[str, Any]:
+def sample_chat_request() -> dict[str, Any]:
     """Sample chat completion request"""
     return {
         "model": "gpt-4",
         "messages": [
             {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": "Hello!"}
+            {"role": "user", "content": "Hello!"},
         ],
         "temperature": 0.7,
-        "max_tokens": 100
+        "max_tokens": 100,
     }
 
 
 @pytest.fixture
-def sample_chat_response() -> Dict[str, Any]:
+def sample_chat_response() -> dict[str, Any]:
     """Sample chat completion response from Azure OpenAI"""
     return {
         "id": "chatcmpl-123",
@@ -99,16 +105,12 @@ def sample_chat_response() -> Dict[str, Any]:
                 "index": 0,
                 "message": {
                     "role": "assistant",
-                    "content": "Hello! How can I help you today?"
+                    "content": "Hello! How can I help you today?",
                 },
-                "finish_reason": "stop"
+                "finish_reason": "stop",
             }
         ],
-        "usage": {
-            "prompt_tokens": 20,
-            "completion_tokens": 10,
-            "total_tokens": 30
-        }
+        "usage": {"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30},
     }
 
 

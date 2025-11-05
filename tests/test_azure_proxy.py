@@ -3,9 +3,10 @@
 Tests request forwarding to Azure OpenAI API with proper authentication.
 """
 
-import pytest
-from unittest.mock import Mock, patch, AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
+
 import httpx
+import pytest
 
 
 class TestAzureOpenAIProxy:
@@ -44,6 +45,7 @@ class TestAzureOpenAIProxy:
                 mock_client_class.return_value = mock_client
 
                 from gateway.azure_proxy import AzureOpenAIProxy
+
                 proxy = AzureOpenAIProxy()
 
                 result = await proxy.chat_completion(sample_chat_request)
@@ -63,7 +65,9 @@ class TestAzureOpenAIProxy:
                 assert call_args[0][0] == expected_url
 
                 # Check headers
-                assert call_args[1]["headers"]["Authorization"] == f"Bearer {mock_token}"
+                assert (
+                    call_args[1]["headers"]["Authorization"] == f"Bearer {mock_token}"
+                )
                 assert call_args[1]["headers"]["Content-Type"] == "application/json"
 
                 # Check params
@@ -82,7 +86,7 @@ class TestAzureOpenAIProxy:
         """Test chat completion with custom model/deployment name"""
         custom_request = {
             "model": "gpt-35-turbo",
-            "messages": [{"role": "user", "content": "Test"}]
+            "messages": [{"role": "user", "content": "Test"}],
         }
 
         with patch("gateway.azure_proxy.auth.get_authenticator") as mock_get_auth:
@@ -100,6 +104,7 @@ class TestAzureOpenAIProxy:
                 mock_client_class.return_value = mock_client
 
                 from gateway.azure_proxy import AzureOpenAIProxy
+
                 proxy = AzureOpenAIProxy()
 
                 await proxy.chat_completion(custom_request)
@@ -125,14 +130,13 @@ class TestAzureOpenAIProxy:
                 mock_response.status_code = 401
                 mock_response.text = "Unauthorized"
                 mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-                    "401 Unauthorized",
-                    request=Mock(),
-                    response=mock_response
+                    "401 Unauthorized", request=Mock(), response=mock_response
                 )
                 mock_client.post = AsyncMock(return_value=mock_response)
                 mock_client_class.return_value = mock_client
 
                 from gateway.azure_proxy import AzureOpenAIProxy
+
                 proxy = AzureOpenAIProxy()
 
                 with pytest.raises(httpx.HTTPStatusError):
@@ -154,6 +158,7 @@ class TestAzureOpenAIProxy:
                 mock_client_class.return_value = mock_client
 
                 from gateway.azure_proxy import AzureOpenAIProxy
+
                 proxy = AzureOpenAIProxy()
 
                 with pytest.raises(httpx.ConnectError):
@@ -168,6 +173,7 @@ class TestAzureOpenAIProxy:
             mock_get_token.side_effect = Exception("Token acquisition failed")
 
             from gateway.azure_proxy import AzureOpenAIProxy
+
             proxy = AzureOpenAIProxy()
 
             with pytest.raises(Exception) as exc_info:
@@ -183,6 +189,7 @@ class TestAzureOpenAIProxy:
             mock_client_class.return_value = mock_client
 
             from gateway.azure_proxy import AzureOpenAIProxy
+
             proxy = AzureOpenAIProxy()
 
             await proxy.close()
@@ -206,9 +213,7 @@ class TestAzureOpenAIProxy:
         self, mock_settings, mock_token, sample_chat_response
     ):
         """Test that default model is used when not specified"""
-        request_without_model = {
-            "messages": [{"role": "user", "content": "Test"}]
-        }
+        request_without_model = {"messages": [{"role": "user", "content": "Test"}]}
 
         with patch("gateway.azure_proxy.auth.get_authenticator") as mock_get_auth:
             mock_authenticator = MagicMock()
@@ -225,6 +230,7 @@ class TestAzureOpenAIProxy:
                 mock_client_class.return_value = mock_client
 
                 from gateway.azure_proxy import AzureOpenAIProxy
+
                 proxy = AzureOpenAIProxy()
 
                 await proxy.chat_completion(request_without_model)
@@ -235,16 +241,22 @@ class TestAzureOpenAIProxy:
                 assert call_args[0][0] == expected_url
 
     @pytest.mark.asyncio
-    async def test_chat_completion_strips_trailing_slash(self, mock_token, sample_chat_request, sample_chat_response):
+    async def test_chat_completion_strips_trailing_slash(
+        self, mock_token, sample_chat_request, sample_chat_response
+    ):
         """Test that trailing slash in endpoint is properly handled"""
         with patch("gateway.azure_proxy.settings") as mock_settings_module:
             # Endpoint WITH trailing slash
-            mock_settings_module.azure_openai_endpoint = "https://test.openai.azure.com/"
+            mock_settings_module.azure_openai_endpoint = (
+                "https://test.openai.azure.com/"
+            )
 
             with patch("gateway.azure_proxy.auth.get_authenticator") as mock_get_auth:
                 mock_get_auth.return_value.get_token.return_value = mock_token
 
-                with patch("gateway.azure_proxy.httpx.AsyncClient") as mock_client_class:
+                with patch(
+                    "gateway.azure_proxy.httpx.AsyncClient"
+                ) as mock_client_class:
                     mock_client = AsyncMock()
                     mock_response = Mock()
                     mock_response.json.return_value = sample_chat_response
@@ -254,6 +266,7 @@ class TestAzureOpenAIProxy:
                     mock_client_class.return_value = mock_client
 
                     from gateway.azure_proxy import AzureOpenAIProxy
+
                     proxy = AzureOpenAIProxy()
 
                     await proxy.chat_completion(sample_chat_request)
