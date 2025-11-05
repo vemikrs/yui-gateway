@@ -192,7 +192,13 @@ def list_openai_accounts(credential) -> List[OpenAIAccount]:
                     return out
                 # Run the coroutine synchronously since we are in sync function
                 import asyncio as _asyncio
-                items = _asyncio.get_event_loop().run_until_complete(_fetch_all(url))
+                try:
+                    loop = _asyncio.get_running_loop()
+                    # We're already in async context, can't nest
+                    items = []
+                except RuntimeError:
+                    # No running loop, safe to create one
+                    items = _asyncio.run(_fetch_all(url))
                 for it in items:
                     try:
                         kind = (it.get("kind") or "").lower()
@@ -363,7 +369,11 @@ def assign_cog_user_role(
     if not role_def_id:
         raise RuntimeError("'Cognitive Services User' ロール定義が見つかりません")
 
-    params = RoleAssignmentCreateParameters(role_definition_id=role_def_id, principal_id=principal_object_id)
+    params = RoleAssignmentCreateParameters(
+        role_definition_id=role_def_id, 
+        principal_id=principal_object_id,
+        principal_type="ServicePrincipal"  # Handle replication delay
+    )
     name = str(uuid4())
     try:
         auth.role_assignments.create(scope=resource_scope, role_assignment_name=name, parameters=params)
