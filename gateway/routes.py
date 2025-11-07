@@ -11,8 +11,10 @@ import logging
 from typing import Any
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ValidationError
 
 from gateway import azure_proxy
 
@@ -47,6 +49,45 @@ app = FastAPI(
 )
 
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Pydantic バリデーションエラーをより詳細に報告
+
+    A5M2 などのクライアントでのデバッグを容易にするため、
+    エラーの詳細情報を構造化して返す。
+    """
+    logger.error(f"Validation error for {request.method} {request.url}: {exc}")
+
+    errors = []
+    for error in exc.errors():
+        error_detail = {
+            "field": " -> ".join(str(loc) for loc in error["loc"][1:]),  # "body" を除去
+            "message": error["msg"],
+            "type": error["type"],
+            "input": error.get("input")
+        }
+
+        # A5M2互換性: modelフィールドが欠けている場合の特別なヘルプメッセージ
+        if error["type"] == "missing" and "model" in error["loc"]:
+            error_detail["help"] = "A5M2 users: Make sure to include the 'model' field in your request. Example: {'model': 'gpt-4', ...}"
+
+        errors.append(error_detail)
+
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "validation_error",
+            "message": "Request validation failed",
+            "details": errors,
+            "help": "Check that your request matches the OpenAI chat completions API format",
+            "common_issues": {
+                "missing_model": "A5M2 users should include 'model' field (e.g., 'gpt-4')",
+                "streaming": "Set 'stream': false or omit it (streaming not supported)"
+            }
+        }
+    )
+
+
 # === Pydantic モデル定義 ===
 
 
@@ -60,7 +101,7 @@ class Message(BaseModel):
 class ChatCompletionRequest(BaseModel):
     """チャット補完リクエスト（OpenAI 互換）"""
 
-    model: str
+    model: str = "gpt-4"  # A5M2互換性のためデフォルト値を設定
     messages: list[Message]
     temperature: float | None = 1.0
     top_p: float | None = 1.0
@@ -107,7 +148,29 @@ async def chat_completions(request: ChatCompletionRequest) -> dict[str, Any]:
     Raises:
         HTTPException: プロキシ処理に失敗した場合
     """
-    logger.info(f"Received chat completion request for model: {request.model}")
+    # A5M2 デバッグのための詳細ログ
+    logger.info(f"=== Chat Completion Request ===")
+    logger.info(f"Model: {request.model}")
+    logger.info(f"Messages count: {len(request.messages)}")
+    logger.info(f"Temperature: {request.temperature}")
+    logger.info(f"Max tokens: {request.max_tokens}")
+    logger.info(f"Stream: {request.stream}")
+
+    # ストリーミングリクエストのチェック
+    if request.stream:
+        logger.warning("Streaming request detected but not supported")
+        raise HTTPException(
+            status_code=501,
+            detail={
+                "error": "streaming_not_supported",
+                "message": "Streaming responses are not currently supported",
+                "help": "Please set 'stream': false or omit the stream parameter"
+            }
+        )
+
+    # メッセージ内容をログ（デバッグレベル）
+    for i, msg in enumerate(request.messages):
+        logger.debug(f"Message {i}: {msg.role} - {msg.content[:100]}...")
 
     try:
         # リクエストを辞書に変換
@@ -116,10 +179,33 @@ async def chat_completions(request: ChatCompletionRequest) -> dict[str, Any]:
         # Azure OpenAI にプロキシ
         response = await azure_proxy.get_proxy().chat_completion(request_dict)
 
+        # レスポンス情報をログ
+        logger.info(f"Response received - Model: {response.get('model', 'unknown')}")
+        logger.info(f"Usage: {response.get('usage', {})}")
+        logger.info(f"=== Request completed successfully ===")
+
         return response
 
     except Exception as e:
         logger.error(f"Error processing chat completion: {str(e)}")
+
+        # Azure OpenAI のエラーレスポンスをより詳細に解析
+        error_detail = str(e)
+        if "404 DeploymentNotFound" in error_detail:
+            # デプロイメント名エラーの場合、利用可能なモデルを提案
+            from gateway.settings import settings
+            available_models = list(settings.model_mapping.keys())
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "deployment_not_found",
+                    "message": f"The specified model deployment was not found",
+                    "requested_model": request.model,
+                    "available_models": available_models,
+                    "help": "Use one of the available model names or check your Azure OpenAI deployment"
+                }
+            ) from e
+
         raise HTTPException(
             status_code=500, detail=f"Failed to process request: {str(e)}"
         ) from e

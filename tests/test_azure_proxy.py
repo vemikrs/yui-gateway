@@ -60,8 +60,8 @@ class TestAzureOpenAIProxy:
                 mock_client.post.assert_called_once()
                 call_args = mock_client.post.call_args
 
-                # Check URL
-                expected_url = f"{mock_settings.azure_openai_endpoint}/openai/deployments/gpt-4/chat/completions"
+                # Check URL - model mapping should convert gpt-4 to gpt-5-mini
+                expected_url = f"{mock_settings.azure_openai_endpoint}/openai/deployments/gpt-5-mini/chat/completions"
                 assert call_args[0][0] == expected_url
 
                 # Check headers
@@ -71,7 +71,7 @@ class TestAzureOpenAIProxy:
                 assert call_args[1]["headers"]["Content-Type"] == "application/json"
 
                 # Check params
-                assert call_args[1]["params"]["api-version"] == "2024-02-15-preview"
+                assert call_args[1]["params"]["api-version"] == "2024-10-21"
 
                 # Check body
                 assert call_args[1]["json"] == sample_chat_request
@@ -235,9 +235,9 @@ class TestAzureOpenAIProxy:
 
                 await proxy.chat_completion(request_without_model)
 
-                # Verify URL uses default model (gpt-4)
+                # Verify URL uses default model (gpt-4) mapped to gpt-5-mini
                 call_args = mock_client.post.call_args
-                expected_url = f"{mock_settings.azure_openai_endpoint}/openai/deployments/gpt-4/chat/completions"
+                expected_url = f"{mock_settings.azure_openai_endpoint}/openai/deployments/gpt-5-mini/chat/completions"
                 assert call_args[0][0] == expected_url
 
     @pytest.mark.asyncio

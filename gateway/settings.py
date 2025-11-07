@@ -26,6 +26,15 @@ class Settings(BaseSettings):
     # その他
     log_level: str = "INFO"
 
+    # モデル名マッピング（OpenAI標準名 -> Azure デプロイメント名）
+    model_mapping: dict[str, str] = {
+        "gpt-4": "gpt-5-mini",
+        "gpt-4o": "gpt-5-mini",
+        "gpt-4-turbo": "gpt-5-mini",
+        "gpt-3.5-turbo": "gpt-5-mini",
+        "gpt-5-mini": "gpt-5-mini",  # 実際のデプロイメント名もそのまま許可
+    }
+
     # Pydantic v2: class-based Config は非推奨。SettingsConfigDict を使用。
     model_config = SettingsConfigDict(
         env_file=".env",

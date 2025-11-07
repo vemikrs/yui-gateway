@@ -47,7 +47,10 @@ class AzureOpenAIProxy:
         token = auth.get_authenticator().get_token()
 
         # Azure OpenAI のデプロイメント名を取得（model フィールドから）
-        deployment_name = request_data.get("model", "gpt-4")
+        original_model = request_data.get("model", "gpt-4")
+        deployment_name = settings.model_mapping.get(original_model, original_model)
+
+        logger.info(f"Model mapping: {original_model} -> {deployment_name}")
 
         # Azure OpenAI エンドポイント URL を構築
         # 形式: {endpoint}/openai/deployments/{deployment-id}/chat/completions?api-version=2024-02-15-preview
@@ -60,7 +63,7 @@ class AzureOpenAIProxy:
         }
 
         # API バージョンをクエリパラメータに追加
-        params = {"api-version": "2024-02-15-preview"}
+        params = {"api-version": "2024-10-21"}
 
         logger.info(f"Forwarding request to Azure OpenAI: {deployment_name}")
         logger.debug(f"Request URL: {url}")
