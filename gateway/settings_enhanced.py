@@ -1,4 +1,4 @@
-"""Dynamic configuration system
+"""Enhanced dynamic configuration system
 
 拡張性と柔軟性を重視した設定システム。
 複数のプロバイダー、環境別設定、動的モデルマッピングをサポート。
@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Any, Union
 from enum import Enum
 from pathlib import Path
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -22,26 +22,6 @@ class ProviderType(Enum):
     AZURE_OPENAI = "azure_openai"
     OPENAI = "openai"
     CLAUDE = "claude"
-
-
-class ProviderSettings(BaseModel):
-    """Base provider configuration"""
-    type: ProviderType
-    name: str
-    enabled: bool = True
-    timeout: float = 120.0
-    retry_attempts: int = 3
-
-
-class AzureOpenAISettings(ProviderSettings):
-    """Azure OpenAI specific settings"""
-    type: ProviderType = ProviderType.AZURE_OPENAI
-    endpoint: str
-    api_version: str = "2024-10-21"
-    tenant_id: str
-    client_id: str
-    client_secret: str
-    scope: str = "https://cognitiveservices.azure.com/.default"
 
 
 class ModelMapping(BaseModel):
@@ -60,55 +40,66 @@ class EndpointConfig(BaseModel):
     require_auth: bool = False
 
 
-class Settings(BaseSettings):
-    """YuiGateway 設定クラス
+class EnhancedSettings(BaseSettings):
+    """汎用性の高い YuiGateway 設定クラス
 
-    .env ファイルまたは環境変数から読み込まれる。
-    Azure AD (Entra ID) 認証と Azure OpenAI エンドポイントの設定を保持する。
+    複数のプロバイダー、動的設定、環境別構成をサポート。
+    .env ファイル、環境変数、JSON設定ファイルから読み込み可能。
     """
 
-    # Entra ID 認証情報
-    tenant_id: str
-    client_id: str
-    client_secret: str
-    scope: str = "https://cognitiveservices.azure.com/.default"
-
-    # Azure OpenAI エンドポイント
-    azure_openai_endpoint: str
-
-    # その他
+    # サービス基本設定
+    service_name: str = "YuiGateway"
+    service_version: str = "0.2.0"
+    environment: str = Field(default="development", description="Environment: development, staging, production")
     log_level: str = "INFO"
-    environment: str = "development"
+    debug: bool = False
 
     # プロバイダー設定
-    providers: Dict[str, Dict[str, Any]] = Field(default_factory=lambda: {
-        "azure_openai": {
-            "enabled": True,
-            "endpoint": "",
-            "tenant_id": "",
-            "client_id": "",
-            "client_secret": "",
-            "models": {}
+    providers: Dict[str, Dict[str, Any]] = Field(
+        default_factory=lambda: {
+            "azure_openai": {
+                "type": "azure_openai",
+                "name": "primary",
+                "enabled": True,
+                "endpoint": "",  # 環境変数から設定
+                "tenant_id": "",
+                "client_id": "",
+                "client_secret": "",
+                "api_version": "2024-10-21"
+            }
         }
-    })
+    )
 
-    # モデルマッピング設定
-    model_mappings: List[Dict[str, str]] = Field(default_factory=lambda: [
-        {
-            "source_model": "gpt-4",
-            "target_model": "gpt-5-mini",
-            "provider": "azure",
-            "description": "Map gpt-4 to gpt-5-mini deployment"
-        },
-        {
-            "source_model": "gpt-35-turbo",
-            "target_model": "gpt-35-turbo",
-            "provider": "azure",
-            "description": "Direct mapping for gpt-35-turbo"
+    # モデルマッピング (動的設定可能)
+    model_mappings: List[ModelMapping] = Field(
+        default_factory=lambda: [
+            ModelMapping(source_model="gpt-4", target_model="gpt-5-mini", provider="azure_openai"),
+            ModelMapping(source_model="gpt-4o", target_model="gpt-5-mini", provider="azure_openai"),
+            ModelMapping(source_model="gpt-4-turbo", target_model="gpt-5-mini", provider="azure_openai"),
+            ModelMapping(source_model="gpt-3.5-turbo", target_model="gpt-5-mini", provider="azure_openai"),
+            ModelMapping(source_model="gpt-5-mini", target_model="gpt-5-mini", provider="azure_openai")
+        ]
+    )
+
+    # APIエンドポイント設定
+    endpoints: Dict[str, EndpointConfig] = Field(
+        default_factory=lambda: {
+            "chat_completions": EndpointConfig(path="/v1/chat/completions", enabled=True),
+            "models": EndpointConfig(path="/v1/models", enabled=True),
+            "health": EndpointConfig(path="/health", enabled=True)
         }
-    ])
+    )
 
-    # モデル名マッピングは model_mappings リストから動的に生成されます
+    # フォールバック設定
+    enable_fallback: bool = True
+    fallback_order: List[str] = Field(default_factory=lambda: ["azure_openai"])
+
+    # レガシーサポート用のフィールド
+    tenant_id: Optional[str] = None
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+    azure_openai_endpoint: Optional[str] = None
+    scope: str = "https://cognitiveservices.azure.com/.default"
 
     model_config = SettingsConfigDict(
         env_file=[".env.local", ".env"],
@@ -205,31 +196,37 @@ class Settings(BaseSettings):
         """旧いmodel_mapping形式との互換性用"""
         mapping = {}
         for m in self.model_mappings:
-            mapping[m["source_model"]] = m["target_model"]
+            mapping[m.source_model] = m.target_model
         return mapping
 
 
 class SettingsManager:
     """設定マネージャークラス"""
 
-    _instance: Optional['Settings'] = None
+    _instance: Optional['EnhancedSettings'] = None
 
     @classmethod
-    def get_settings(cls, reload: bool = False) -> Settings:
+    def get_settings(cls, reload: bool = False) -> EnhancedSettings:
         """設定インスタンスを取得（テストではリロード可能）"""
         if cls._instance is None or reload:
-            cls._instance = Settings()
+            cls._instance = EnhancedSettings()
         return cls._instance
 
     @classmethod
-    def set_settings(cls, settings: Settings):
+    def set_settings(cls, settings: EnhancedSettings):
         """テスト用の設定オーバーライド"""
         cls._instance = settings
 
+
+# レガシーサポート用のエイリアス
+Settings = EnhancedSettings
 
 # グローバルアクセス用のショートカット
 settings = SettingsManager.get_settings()
 
 # レガシーサポート用
-def get_settings() -> Settings:
+def get_settings() -> EnhancedSettings:
     return SettingsManager.get_settings()
+
+# 新しい設定が正しく動作することを確認
+logger.info(f"YuiGateway {settings.service_version} initialized with {len(settings.get_enabled_providers())} providers")
