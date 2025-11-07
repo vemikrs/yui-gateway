@@ -1,12 +1,18 @@
 """Pytest fixtures and configuration for YuiGateway tests
 
 Provides shared fixtures for mocking Azure AD and Azure OpenAI services.
+統合された新しいモック機能とテストユーティリティをサポート。
 """
 
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
+
+from tests.test_utils import (
+    MockAzureOpenAIService, TestDataFactory, MockPublicClientApplication,
+    MockRedisClient, create_mock_context_manager
+)
 
 
 @pytest.fixture
@@ -129,3 +135,68 @@ def mock_httpx_response(sample_chat_response):
     response.json.return_value = sample_chat_response
     response.raise_for_status = Mock()
     return response
+
+
+# 新しいモック機能のフィクスチャ
+
+@pytest.fixture
+def mock_azure_service():
+    """Mock Azure OpenAI service instance"""
+    return MockAzureOpenAIService()
+
+
+@pytest.fixture
+def test_data_factory():
+    """Test data factory instance"""
+    return TestDataFactory()
+
+
+@pytest.fixture
+def mock_msal_public_app():
+    """Mock MSAL PublicClientApplication"""
+    return MockPublicClientApplication("test-client-id")
+
+
+@pytest.fixture
+def mock_redis_client():
+    """Mock Redis client"""
+    return MockRedisClient()
+
+
+@pytest.fixture
+def sample_streaming_chunks():
+    """Sample streaming response chunks"""
+    return TestDataFactory.create_streaming_chunks(
+        content="This is a streaming response test.",
+        model="gpt-4"
+    )
+
+
+@pytest.fixture
+def sample_error_response():
+    """Sample error response"""
+    return TestDataFactory.create_error_response(
+        message="Invalid request parameters",
+        error_type="invalid_request_error",
+        code="invalid_request"
+    )
+
+
+@pytest.fixture(autouse=True)
+def setup_test_environment():
+    """自動実行されるテスト環境セットアップ"""
+    # グローバルなモックインスタンスをリセット
+    from tests.test_utils import mock_azure_service, mock_msal_app, mock_redis
+
+    mock_azure_service.clear_history()
+    mock_msal_app._tokens.clear()
+    mock_redis.data.clear()
+    mock_redis.expiry.clear()
+
+    yield
+
+    # テスト後クリーンアップ
+    mock_azure_service.clear_history()
+    mock_msal_app._tokens.clear()
+    mock_redis.data.clear()
+    mock_redis.expiry.clear()

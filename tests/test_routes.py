@@ -121,12 +121,23 @@ class TestChatCompletionsEndpoint:
             assert call_args["top_p"] == 0.9
 
     def test_chat_completions_missing_model_field(self, client):
-        """Test that missing model field returns validation error"""
-        invalid_request = {"messages": [{"role": "user", "content": "Test"}]}
+        """Test that missing model field uses default model"""
+        # modelフィールドが省略された場合、デフォルト値が使用される
+        request_without_model = {"messages": [{"role": "user", "content": "Test"}]}
 
-        response = client.post("/v1/chat/completions", json=invalid_request)
+        with patch("gateway.azure_proxy.get_proxy") as mock_get_proxy:
+            mock_proxy = AsyncMock()
+            mock_proxy.chat_completion.return_value = {
+                "choices": [{"message": {"content": "Test response"}}]
+            }
+            mock_get_proxy.return_value = mock_proxy
 
-        assert response.status_code == 422  # Validation error
+            response = client.post("/v1/chat/completions", json=request_without_model)
+
+            assert response.status_code == 200
+            # デフォルトモデル"gpt-4"が使用されることを確認
+            call_args = mock_proxy.chat_completion.call_args[0][0]
+            assert call_args["model"] == "gpt-4"
 
     def test_chat_completions_missing_messages_field(self, client):
         """Test that missing messages field returns validation error"""

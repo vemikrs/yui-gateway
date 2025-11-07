@@ -8,6 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import httpx
 import pytest
 
+from tests.test_utils import MockAzureOpenAIService, TestDataFactory, create_mock_context_manager
+
 
 class TestAzureOpenAIProxy:
     """Tests for AzureOpenAIProxy class"""
