@@ -13,8 +13,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ValidationError
+import json
+import uuid
+from datetime import datetime
 
 from gateway import azure_proxy
 
@@ -82,7 +85,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "help": "Check that your request matches the OpenAI chat completions API format",
             "common_issues": {
                 "missing_model": "A5M2 users should include 'model' field (e.g., 'gpt-4')",
-                "streaming": "Set 'stream': false or omit it (streaming not supported)"
+                "streaming": "Streaming is now supported! Use 'stream': true for real-time responses"
             }
         }
     )
@@ -123,6 +126,8 @@ async def root():
         "version": "0.1.0",
         "description": "Entra ID-based local proxy to Azure OpenAI",
         "endpoints": ["/v1/chat/completions"],
+        "features": ["streaming", "model_mapping", "enhanced_error_handling"],
+        "streaming": "Supported via 'stream': true parameter"
     }
 
 
@@ -133,7 +138,7 @@ async def health():
 
 
 @app.post("/v1/chat/completions")
-async def chat_completions(request: ChatCompletionRequest) -> dict[str, Any]:
+async def chat_completions(request: ChatCompletionRequest):
     """チャット補完エンドポイント（OpenAI 互換）
 
     OpenAI API の /v1/chat/completions と同じインターフェースを提供。
@@ -156,18 +161,6 @@ async def chat_completions(request: ChatCompletionRequest) -> dict[str, Any]:
     logger.info(f"Max tokens: {request.max_tokens}")
     logger.info(f"Stream: {request.stream}")
 
-    # ストリーミングリクエストのチェック
-    if request.stream:
-        logger.warning("Streaming request detected but not supported")
-        raise HTTPException(
-            status_code=501,
-            detail={
-                "error": "streaming_not_supported",
-                "message": "Streaming responses are not currently supported",
-                "help": "Please set 'stream': false or omit the stream parameter"
-            }
-        )
-
     # メッセージ内容をログ（デバッグレベル）
     for i, msg in enumerate(request.messages):
         logger.debug(f"Message {i}: {msg.role} - {msg.content[:100]}...")
@@ -176,15 +169,24 @@ async def chat_completions(request: ChatCompletionRequest) -> dict[str, Any]:
         # リクエストを辞書に変換
         request_dict = request.model_dump(exclude_none=True)
 
-        # Azure OpenAI にプロキシ
-        response = await azure_proxy.get_proxy().chat_completion(request_dict)
+        if request.stream:
+            # ストリーミングレスポンス
+            logger.info("Processing streaming request")
+            return StreamingResponse(
+                stream_chat_completion(request_dict),
+                media_type="text/plain",
+                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
+            )
+        else:
+            # 通常のレスポンス
+            response = await azure_proxy.get_proxy().chat_completion(request_dict)
 
-        # レスポンス情報をログ
-        logger.info(f"Response received - Model: {response.get('model', 'unknown')}")
-        logger.info(f"Usage: {response.get('usage', {})}")
-        logger.info(f"=== Request completed successfully ===")
+            # レスポンス情報をログ
+            logger.info(f"Response received - Model: {response.get('model', 'unknown')}")
+            logger.info(f"Usage: {response.get('usage', {})}")
+            logger.info(f"=== Request completed successfully ===")
 
-        return response
+            return response
 
     except Exception as e:
         logger.error(f"Error processing chat completion: {str(e)}")
@@ -209,6 +211,40 @@ async def chat_completions(request: ChatCompletionRequest) -> dict[str, Any]:
         raise HTTPException(
             status_code=500, detail=f"Failed to process request: {str(e)}"
         ) from e
+
+
+async def stream_chat_completion(request_dict: dict[str, Any]):
+    """ストリーミングチャット補完の処理
+
+    Azure OpenAIのストリーミングレスポンスをOpenAI互換形式で返す。
+    Server-Sent Events (SSE) 形式でデータを送信。
+    """
+    try:
+        # ストリーミングレスポンスをAzure OpenAIから取得
+        stream_response = azure_proxy.get_proxy().chat_completion_stream(request_dict)
+
+        async for chunk in stream_response:
+            if chunk:
+                # OpenAI互換のSSE形式で送信
+                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+
+        # ストリーム終了のシグナル
+        yield "data: [DONE]\n\n"
+
+        logger.info("=== Streaming request completed successfully ===")
+
+    except Exception as e:
+        logger.error(f"Error in streaming response: {str(e)}")
+        # エラーをSSE形式で送信
+        error_chunk = {
+            "error": {
+                "message": str(e),
+                "type": "stream_error",
+                "code": "internal_error"
+            }
+        }
+        yield f"data: {json.dumps(error_chunk, ensure_ascii=False)}\n\n"
+        yield "data: [DONE]\n\n"
 
 
 async def shutdown_event():
