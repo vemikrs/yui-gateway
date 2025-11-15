@@ -1,0 +1,90 @@
+# YuiGateway Configuration File
+# コピーしてconfig.yamlとして使用してください
+
+# コア設定
+core:
+  # 環境設定
+  environment: development  # development, staging, production
+  log_level: INFO  # DEBUG, INFO, WARNING, ERROR
+
+  # Azure OpenAI エンドポイント設定
+  azure_openai:
+    endpoint: ${AZURE_OPENAI_ENDPOINT}
+    api_version: "2024-10-21"
+
+    # サポートするモデルリスト（実際のAzureデプロイメント名）
+    available_models:
+      - gpt-5-mini
+      - gpt-4o
+      - gpt-35-turbo
+      - gpt-4-turbo
+
+  # Entra ID 認証設定
+  auth:
+    tenant_id: ${TENANT_ID}
+    client_id: ${CLIENT_ID}
+    client_secret: ${CLIENT_SECRET}
+    scope: "https://cognitiveservices.azure.com/.default"
+
+# プラグイン設定（オプション機能）
+plugins:
+  # A5M2互換ミドルウェア
+  a5m2_compatibility:
+    enabled: false  # デフォルトでは無効
+
+    # モデル名エイリアス設定
+    # A5M2が送信するOpenAI標準モデル名 → Azureデプロイメント名
+    model_aliases:
+      gpt-4: gpt-5-mini
+      gpt-4-turbo: gpt-5-mini
+      gpt-4o: gpt-4o
+      gpt-3.5-turbo: gpt-35-turbo
+      gpt-35-turbo: gpt-35-turbo
+
+  # カスタムミドルウェア用の設定例
+  # custom_middleware:
+  #   enabled: false
+  #   config:
+  #     key: value
+
+# キャッシング設定
+caching:
+  enabled: false
+  backend: memory  # memory, file, redis
+  ttl: 3600  # Time to live in seconds
+  max_size: 1000  # Maximum number of cached items
+
+  # ファイルバックエンド設定
+  file:
+    path: .cache/responses
+
+  # Redisバックエンド設定（将来拡張用）
+  # redis:
+  #   host: localhost
+  #   port: 6379
+  #   db: 0
+
+# レート制限設定
+rate_limiting:
+  enabled: false
+  default_limit: 100  # requests per window
+  default_window: 60.0  # seconds
+
+  # プロバイダー別の制限設定
+  provider_limits:
+    azure:
+      limit: 60
+      window: 60.0
+
+# モニタリング設定
+monitoring:
+  enabled: false
+  providers:
+    - azure
+  export_interval: 60.0  # seconds
+
+  # アラート設定
+  alerts:
+    error_rate_threshold: 0.1  # 10%
+    response_time_threshold: 5.0  # seconds
+    availability_threshold: 0.95  # 95%

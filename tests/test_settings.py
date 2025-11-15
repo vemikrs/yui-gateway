@@ -45,9 +45,20 @@ def test_settings_default_log_level(mock_settings):
 
 
 def test_settings_custom_log_level(
-    mock_tenant_id, mock_client_id, mock_client_secret, mock_azure_endpoint, monkeypatch
+    mock_tenant_id,
+    mock_client_id,
+    mock_client_secret,
+    mock_azure_endpoint,
+    monkeypatch,
+    tmp_path,
 ):
     """Test that custom log level can be set"""
+    # テスト用の一時ディレクトリに移動（config.yamlを読み込まないようにする）
+    monkeypatch.chdir(tmp_path)
+
+    # 自動生成を無効化
+    monkeypatch.setenv("CONFIG_AUTO_CREATE", "false")
+
     monkeypatch.setenv("TENANT_ID", mock_tenant_id)
     monkeypatch.setenv("CLIENT_ID", mock_client_id)
     monkeypatch.setenv("CLIENT_SECRET", mock_client_secret)
@@ -61,8 +72,6 @@ def test_settings_custom_log_level(
     importlib.reload(settings_module)
 
     assert settings_module.settings.log_level == "DEBUG"
-
-
 def test_settings_missing_required_field_raises_error(monkeypatch, tmp_path):
     """Test that missing required fields raise validation errors"""
     # Clear all required environment variables

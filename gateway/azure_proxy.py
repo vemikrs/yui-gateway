@@ -50,10 +50,13 @@ class AzureOpenAIProxy:
         token = auth.get_authenticator().get_token()
 
         # Azure OpenAI のデプロイメント名を取得（model フィールドから）
-        original_model = request_data.get("model", "gpt-4")
-        deployment_name = settings.model_mapping.get(original_model, original_model)
+        deployment_name = request_data.get("model", "gpt-5-mini")
 
-        logger.info(f"Model mapping: {original_model} -> {deployment_name}")
+        # モデルサポートチェック
+        if not settings.is_model_supported(deployment_name):
+            logger.warning(f"Unsupported model requested: {deployment_name}. Available models: {settings.available_models}")
+
+        logger.info(f"Using deployment: {deployment_name}")
 
         # Azure OpenAI エンドポイント URL を構築
         # 形式: {endpoint}/openai/deployments/{deployment-id}/chat/completions?api-version=2024-02-15-preview

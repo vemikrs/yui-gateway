@@ -1,7 +1,7 @@
-"""Dynamic configuration system
+"""Clean configuration system
 
-拡張性と柔軟性を重視した設定システム。
-複数のプロバイダー、環境別設定、動的モデルマッピングをサポート。
+クリーンアーキテクチャを重視した設定システム。
+コア機能は直接的でシンプル、カスタム機能はプラグインで実装。
 """
 
 import os
@@ -13,6 +13,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from gateway.config_loader import ConfigLoader
 
 logger = logging.getLogger(__name__)
 
@@ -92,23 +94,11 @@ class Settings(BaseSettings):
         }
     })
 
-    # モデルマッピング設定
-    model_mappings: List[Dict[str, str]] = Field(default_factory=lambda: [
-        {
-            "source_model": "gpt-4",
-            "target_model": "gpt-5-mini",
-            "provider": "azure",
-            "description": "Map gpt-4 to gpt-5-mini deployment"
-        },
-        {
-            "source_model": "gpt-35-turbo",
-            "target_model": "gpt-35-turbo",
-            "provider": "azure",
-            "description": "Direct mapping for gpt-35-turbo"
-        }
-    ])
-
-    # モデル名マッピングは model_mappings リストから動的に生成されます
+    # サポートされるモデルリスト（実際のAzureデプロイメント名）
+    # 外部設定ファイルから読み込まれる
+    available_models: List[str] = Field(default_factory=list)    # プラグイン設定（コア機能から分離されたオプション機能）
+    # 外部設定ファイルから読み込まれる
+    plugin_settings: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
 
     model_config = SettingsConfigDict(
         env_file=[".env.local", ".env"],
@@ -119,8 +109,8 @@ class Settings(BaseSettings):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._migrate_legacy_settings()
         self._load_external_config()
+        self._migrate_legacy_settings()
         self._validate_providers()
 
     def _migrate_legacy_settings(self):
@@ -136,36 +126,54 @@ class Settings(BaseSettings):
             logger.info("Migrated legacy settings to new provider format")
 
     def _load_external_config(self):
-        """外部設定ファイルから追加設定を読み込み"""
-        config_files = [
-            f"config.{self.environment}.json",
-            "config.json",
-            "providers.json"
-        ]
+        """外部設定ファイル（YAML）から設定を読み込み"""
+        try:
+            # テスト中は自動生成を無効化（環境変数で制御可能）
+            auto_create = os.getenv("CONFIG_AUTO_CREATE", "true").lower() == "true"
+            external_config = ConfigLoader.load_config(auto_create=auto_create)
 
-        for config_file in config_files:
-            config_path = Path(config_file)
-            if config_path.exists():
-                try:
-                    with open(config_path, 'r', encoding='utf-8') as f:
-                        external_config = json.load(f)
+            if not external_config:
+                logger.info("No external config file found, using environment variables and defaults")
+                return
 
-                    # プロバイダー設定をマージ
-                    if "providers" in external_config:
-                        self.providers.update(external_config["providers"])
+            # コア設定のマージ
+            if "core" in external_config:
+                core_config = external_config["core"]
 
-                    # モデルマッピングをマージ
-                    if "model_mappings" in external_config:
-                        additional_mappings = [
-                            ModelMapping(**mapping)
-                            for mapping in external_config["model_mappings"]
-                        ]
-                        self.model_mappings.extend(additional_mappings)
+                # 環境設定
+                if "environment" in core_config:
+                    self.environment = core_config["environment"]
+                if "log_level" in core_config:
+                    self.log_level = core_config["log_level"]
 
-                    logger.info(f"Loaded external config from {config_file}")
+                # Azure OpenAI設定
+                if "azure_openai" in core_config:
+                    azure_config = core_config["azure_openai"]
+                    if "available_models" in azure_config:
+                        self.available_models = azure_config["available_models"]
+                        logger.info(f"Loaded {len(self.available_models)} available models from config")
 
-                except Exception as e:
-                    logger.warning(f"Failed to load config from {config_file}: {e}")
+                # 認証設定（環境変数が優先）
+                if "auth" in core_config:
+                    auth_config = core_config["auth"]
+                    if not self.tenant_id and "tenant_id" in auth_config:
+                        self.tenant_id = auth_config["tenant_id"]
+                    if not self.client_id and "client_id" in auth_config:
+                        self.client_id = auth_config["client_id"]
+                    if not self.client_secret and "client_secret" in auth_config:
+                        self.client_secret = auth_config["client_secret"]
+
+            # プラグイン設定のマージ
+            if "plugins" in external_config:
+                self.plugin_settings.update(external_config["plugins"])
+                logger.info(f"Loaded {len(external_config['plugins'])} plugin configurations")
+
+            logger.info("External configuration loaded successfully")
+
+        except FileNotFoundError:
+            logger.debug("No external config file found")
+        except Exception as e:
+            logger.warning(f"Failed to load external config: {e}")
 
     def _validate_providers(self):
         """プロバイダー設定のバリデーション"""
@@ -199,14 +207,18 @@ class Settings(BaseSettings):
         """有効なプロバイダーのみを取得"""
         return {name: config for name, config in self.providers.items() if config.get("enabled", True)}
 
-    # レガシーサポート用プロパティ
-    @property
-    def model_mapping(self) -> Dict[str, str]:
-        """旧いmodel_mapping形式との互換性用"""
-        mapping = {}
-        for m in self.model_mappings:
-            mapping[m["source_model"]] = m["target_model"]
-        return mapping
+    def is_model_supported(self, model_name: str) -> bool:
+        """指定されたモデルがサポートされているかチェック"""
+        return model_name in self.available_models
+
+    def get_plugin_config(self, plugin_name: str) -> Dict[str, Any]:
+        """指定されたプラグインの設定を取得"""
+        return self.plugin_settings.get(plugin_name, {})
+
+    def is_plugin_enabled(self, plugin_name: str) -> bool:
+        """指定されたプラグインが有効かチェック"""
+        plugin_config = self.plugin_settings.get(plugin_name, {})
+        return plugin_config.get("enabled", False)
 
 
 class SettingsManager:

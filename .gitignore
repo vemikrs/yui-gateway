@@ -38,6 +38,14 @@ ENV/
 .env
 .env.local
 
+# Configuration files (templates are tracked)
+config.yaml
+config.yml
+config.json
+config.*.yaml
+config.*.yml
+config.*.json
+
 # Testing
 .pytest_cache/
 .coverage

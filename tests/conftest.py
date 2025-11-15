@@ -47,9 +47,12 @@ def mock_azure_endpoint() -> str:
 
 @pytest.fixture
 def mock_settings(
-    mock_tenant_id, mock_client_id, mock_client_secret, mock_azure_endpoint, monkeypatch
+    mock_tenant_id, mock_client_id, mock_client_secret, mock_azure_endpoint, monkeypatch, tmp_path
 ):
     """Mock settings for testing"""
+    # テスト用の一時ディレクトリに移動（config.yamlを読み込まないようにする）
+    monkeypatch.chdir(tmp_path)
+
     monkeypatch.setenv("TENANT_ID", mock_tenant_id)
     monkeypatch.setenv("CLIENT_ID", mock_client_id)
     monkeypatch.setenv("CLIENT_SECRET", mock_client_secret)

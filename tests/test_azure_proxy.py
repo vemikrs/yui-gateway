@@ -62,8 +62,8 @@ class TestAzureOpenAIProxy:
                 mock_client.post.assert_called_once()
                 call_args = mock_client.post.call_args
 
-                # Check URL - model mapping should convert gpt-4 to gpt-5-mini
-                expected_url = f"{mock_settings.azure_openai_endpoint}/openai/deployments/gpt-5-mini/chat/completions"
+                # Check URL - モデル名はそのまま使用される（マッピングなし）
+                expected_url = f"{mock_settings.azure_openai_endpoint}/openai/deployments/gpt-4/chat/completions"
                 assert call_args[0][0] == expected_url
 
                 # Check headers
