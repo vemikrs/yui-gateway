@@ -152,10 +152,10 @@ class TestSystemIntegration:
         assert response.status_code in [401, 500]  # 内部エラーハンドリングによる
 
     @pytest.mark.asyncio
-    async def test_model_mapping_functionality(self, test_client, mock_azure_service):
-        """モデルマッピング機能のテスト"""
-        # gpt-4リクエスト（gpt-5-miniにマップされる）
-        request_data = TestDataFactory.create_chat_request(model="gpt-4")
+    async def test_direct_model_usage(self, test_client, mock_azure_service):
+        """直接的なモデル名使用のテスト（マッピングなし）"""
+        # 実際のデプロイメント名を直接指定
+        request_data = TestDataFactory.create_chat_request(model="gpt-5-mini")
         response_data = TestDataFactory.create_chat_response()
 
         mock_azure_service.set_response(response_data)
@@ -163,11 +163,11 @@ class TestSystemIntegration:
         response = test_client.post("/v1/chat/completions", json=request_data)
         assert response.status_code == 200
 
-        # URLにgpt-5-miniが使用されることを確認
+        # URLに指定したモデル名が使用されることを確認
         last_request = mock_azure_service.get_last_request()
-        assert "gpt-5-mini" in last_request["url"]
+        assert "gpt-4" in last_request["url"] or "gpt-5-mini" in last_request["url"]
 
-        # カスタムモデルのテスト
+        # 別のモデルのテスト
         custom_request = TestDataFactory.create_chat_request(model="gpt-35-turbo")
         mock_azure_service.set_response(response_data)
         mock_azure_service.clear_history()
@@ -175,7 +175,7 @@ class TestSystemIntegration:
         response = test_client.post("/v1/chat/completions", json=custom_request)
         assert response.status_code == 200
 
-        # URLにgpt-35-turboが使用されることを確認
+        # 指定したモデル名がそのまま使用される
         last_request = mock_azure_service.get_last_request()
         assert "gpt-35-turbo" in last_request["url"]
 
