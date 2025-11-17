@@ -218,6 +218,17 @@ def reset_singleton_instances(monkeypatch, tmp_path):
     gateway.auth._authenticator_instance = None
     gateway.azure_proxy._proxy_instance = None
     SettingsManager._instance = None
+    
+    # モジュールレベルの settings 参照も更新
+    # Why: auth.py と azure_proxy.py がトップレベルで settings をインポートしているため
+    import gateway.settings
+    import gateway.auth as auth_module
+    import gateway.azure_proxy as proxy_module
+    
+    new_settings = SettingsManager.get_settings(reload=True)
+    auth_module.settings = new_settings
+    proxy_module.settings = new_settings
+    gateway.settings.settings = new_settings
 
     # グローバルなモックインスタンスをリセット
     from tests.test_utils import mock_azure_service, mock_msal_app, mock_redis

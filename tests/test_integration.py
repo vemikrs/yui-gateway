@@ -32,10 +32,18 @@ class TestSystemIntegration:
 
     @pytest.fixture
     def mock_auth(self):
-        """モック認証"""
-        with patch("msal.PublicClientApplication") as mock_msal:
-            mock_app = MockPublicClientApplication("test-client")
-            mock_app.set_mock_token("test@example.com", "mock_token_12345")
+        """モック認証
+        
+        Why: gateway.authモジュール内のConfidentialClientApplicationをパッチ
+        """
+        with patch("gateway.auth.ConfidentialClientApplication") as mock_msal:
+            mock_app = MagicMock()
+            # acquire_token_silent は None を返す（キャッシュヒットなし）
+            mock_app.acquire_token_silent.return_value = None
+            # acquire_token_for_client は有効なトークンを返す
+            mock_app.acquire_token_for_client.return_value = {
+                "access_token": "mock_access_token_12345"
+            }
             mock_msal.return_value = mock_app
             yield mock_app
 
