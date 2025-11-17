@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 class ProviderType(Enum):
     """Supported provider types"""
+
     AZURE_OPENAI = "azure_openai"
     OPENAI = "openai"
     CLAUDE = "claude"
@@ -28,6 +29,7 @@ class ProviderType(Enum):
 
 class ProviderSettings(BaseModel):
     """Base provider configuration"""
+
     type: ProviderType
     name: str
     enabled: bool = True
@@ -37,6 +39,7 @@ class ProviderSettings(BaseModel):
 
 class AzureOpenAISettings(ProviderSettings):
     """Azure OpenAI specific settings"""
+
     type: ProviderType = ProviderType.AZURE_OPENAI
     endpoint: str
     api_version: str = "2024-10-21"
@@ -48,6 +51,7 @@ class AzureOpenAISettings(ProviderSettings):
 
 class ModelMapping(BaseModel):
     """Dynamic model mapping configuration"""
+
     source_model: str
     target_model: str
     provider: str
@@ -56,6 +60,7 @@ class ModelMapping(BaseModel):
 
 class EndpointConfig(BaseModel):
     """API endpoint configuration"""
+
     path: str
     enabled: bool = True
     rate_limit: Optional[int] = None
@@ -82,21 +87,33 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     environment: str = "development"
 
+    # YuiGateway API 認証キー（オプション）
+    # Why: API認証はオプション機能。設定された場合のみ認証を要求する。
+    # グローバル変数ではなくSettings経由で取得することで、テスト時の分離が容易になる。
+    yuigateway_api_key: Optional[str] = Field(default=None, alias="YUIGATEWAY_API_KEY")
+
     # プロバイダー設定
-    providers: Dict[str, Dict[str, Any]] = Field(default_factory=lambda: {
-        "azure_openai": {
-            "enabled": True,
-            "endpoint": "",
-            "tenant_id": "",
-            "client_id": "",
-            "client_secret": "",
-            "models": {}
+    providers: Dict[str, Dict[str, Any]] = Field(
+        default_factory=lambda: {
+            "azure_openai": {
+                "enabled": True,
+                "endpoint": "",
+                "tenant_id": "",
+                "client_id": "",
+                "client_secret": "",
+                "models": {},
+            }
         }
-    })
+    )
 
     # サポートされるモデルリスト（実際のAzureデプロイメント名）
     # 外部設定ファイルから読み込まれる
-    available_models: List[str] = Field(default_factory=list)    # プラグイン設定（コア機能から分離されたオプション機能）
+    available_models: List[str] = Field(default_factory=list)
+
+    # モデルマッピング設定
+    model_mappings: List[Dict[str, str]] = Field(default_factory=list)
+
+    # プラグイン設定（コア機能から分離されたオプション機能）
     # 外部設定ファイルから読み込まれる
     plugin_settings: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
 
@@ -104,7 +121,7 @@ class Settings(BaseSettings):
         env_file=[".env.local", ".env"],
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="allow"  # 将来の拡張を許可
+        extra="allow",  # 将来の拡張を許可
     )
 
     def __init__(self, **kwargs):
@@ -117,12 +134,14 @@ class Settings(BaseSettings):
         """レガシー設定を新しい形式に移行"""
         if self.tenant_id and self.client_id and self.azure_openai_endpoint:
             # レガシー設定がある場合、providersに移行
-            self.providers["azure_openai"].update({
-                "endpoint": self.azure_openai_endpoint,
-                "tenant_id": self.tenant_id,
-                "client_id": self.client_id,
-                "client_secret": self.client_secret or ""
-            })
+            self.providers["azure_openai"].update(
+                {
+                    "endpoint": self.azure_openai_endpoint,
+                    "tenant_id": self.tenant_id,
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret or "",
+                }
+            )
             logger.info("Migrated legacy settings to new provider format")
 
     def _load_external_config(self):
@@ -130,10 +149,15 @@ class Settings(BaseSettings):
         try:
             # テスト中は自動生成を無効化（環境変数で制御可能）
             auto_create = os.getenv("CONFIG_AUTO_CREATE", "true").lower() == "true"
-            external_config = ConfigLoader.load_config(auto_create=auto_create)
+            config_file = os.getenv("CONFIG_FILE", None)  # 環境変数でパスを指定可能
+            external_config = ConfigLoader.load_config(
+                config_path=config_file, auto_create=auto_create
+            )
 
             if not external_config:
-                logger.info("No external config file found, using environment variables and defaults")
+                logger.info(
+                    "No external config file found, using environment variables and defaults"
+                )
                 return
 
             # コア設定のマージ
@@ -151,7 +175,9 @@ class Settings(BaseSettings):
                     azure_config = core_config["azure_openai"]
                     if "available_models" in azure_config:
                         self.available_models = azure_config["available_models"]
-                        logger.info(f"Loaded {len(self.available_models)} available models from config")
+                        logger.info(
+                            f"Loaded {len(self.available_models)} available models from config"
+                        )
 
                 # 認証設定（環境変数が優先）
                 if "auth" in core_config:
@@ -166,7 +192,9 @@ class Settings(BaseSettings):
             # プラグイン設定のマージ
             if "plugins" in external_config:
                 self.plugin_settings.update(external_config["plugins"])
-                logger.info(f"Loaded {len(external_config['plugins'])} plugin configurations")
+                logger.info(
+                    f"Loaded {len(external_config['plugins'])} plugin configurations"
+                )
 
             logger.info("External configuration loaded successfully")
 
@@ -180,10 +208,14 @@ class Settings(BaseSettings):
         for name, config in self.providers.items():
             if config.get("enabled", True):
                 required_fields = self._get_required_fields(config.get("type"))
-                missing_fields = [field for field in required_fields if not config.get(field)]
+                missing_fields = [
+                    field for field in required_fields if not config.get(field)
+                ]
 
                 if missing_fields:
-                    logger.error(f"Provider {name} missing required fields: {missing_fields}")
+                    logger.error(
+                        f"Provider {name} missing required fields: {missing_fields}"
+                    )
                     config["enabled"] = False
 
     def _get_required_fields(self, provider_type: str) -> List[str]:
@@ -191,21 +223,43 @@ class Settings(BaseSettings):
         required_fields = {
             "azure_openai": ["endpoint", "tenant_id", "client_id", "client_secret"],
             "openai": ["api_key"],
-            "claude": ["api_key"]
+            "claude": ["api_key"],
         }
         return required_fields.get(provider_type, [])
 
-    def get_model_mapping(self, source_model: str, provider: Optional[str] = None) -> Optional[str]:
+    def get_model_mapping(
+        self, source_model: str, provider: Optional[str] = None
+    ) -> Optional[str]:
         """モデルマッピングを取得"""
         for mapping in self.model_mappings:
-            if mapping.source_model == source_model:
-                if provider is None or mapping.provider == provider:
-                    return mapping.target_model
+            source = (
+                mapping.get("source_model")
+                if isinstance(mapping, dict)
+                else getattr(mapping, "source_model", None)
+            )
+            target = (
+                mapping.get("target_model")
+                if isinstance(mapping, dict)
+                else getattr(mapping, "target_model", None)
+            )
+            map_provider = (
+                mapping.get("provider")
+                if isinstance(mapping, dict)
+                else getattr(mapping, "provider", None)
+            )
+
+            if source == source_model:
+                if provider is None or map_provider == provider:
+                    return target
         return source_model  # マッピングがない場合はそのまま返す
 
     def get_enabled_providers(self) -> Dict[str, Dict[str, Any]]:
         """有効なプロバイダーのみを取得"""
-        return {name: config for name, config in self.providers.items() if config.get("enabled", True)}
+        return {
+            name: config
+            for name, config in self.providers.items()
+            if config.get("enabled", True)
+        }
 
     def is_model_supported(self, model_name: str) -> bool:
         """指定されたモデルがサポートされているかチェック"""
@@ -224,7 +278,7 @@ class Settings(BaseSettings):
 class SettingsManager:
     """設定マネージャークラス"""
 
-    _instance: Optional['Settings'] = None
+    _instance: Optional["Settings"] = None
 
     @classmethod
     def get_settings(cls, reload: bool = False) -> Settings:
@@ -241,6 +295,7 @@ class SettingsManager:
 
 # グローバルアクセス用のショートカット
 settings = SettingsManager.get_settings()
+
 
 # レガシーサポート用
 def get_settings() -> Settings:
