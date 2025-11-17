@@ -31,7 +31,7 @@ class TestLogSanitization:
             lineno=0,
             msg="Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGc...",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
 
         filter.filter(record)
@@ -48,7 +48,7 @@ class TestLogSanitization:
             lineno=0,
             msg='{"api_key": "sk-abc123def456"}',
             args=(),
-            exc_info=None
+            exc_info=None,
         )
 
         filter.filter(record)
@@ -65,7 +65,7 @@ class TestLogSanitization:
             lineno=0,
             msg='{"client_secret": "very-secret-value"}',
             args=(),
-            exc_info=None
+            exc_info=None,
         )
 
         filter.filter(record)
@@ -87,13 +87,12 @@ class TestInputValidation:
             "gpt-4o",
             "claude-3",
             "model_name_123",
-            "my.model-name_v2"
+            "my.model-name_v2",
         ]
 
         for model_name in valid_names:
             request = ChatCompletionRequest(
-                model=model_name,
-                messages=[Message(role="user", content="test")]
+                model=model_name, messages=[Message(role="user", content="test")]
             )
             assert request.model == model_name
 
@@ -114,8 +113,7 @@ class TestInputValidation:
         for model_name in invalid_names:
             with pytest.raises(ValidationError):
                 ChatCompletionRequest(
-                    model=model_name,
-                    messages=[Message(role="user", content="test")]
+                    model=model_name, messages=[Message(role="user", content="test")]
                 )
 
 
@@ -127,7 +125,12 @@ class TestAuthenticationMiddleware:
         """APIキーが設定されている場合、認証が必要であることを確認"""
         # 既存の環境変数をクリーンアップ
         for key in list(os.environ.keys()):
-            if key.startswith("YUIGATEWAY_") or key in ["TENANT_ID", "CLIENT_ID", "CLIENT_SECRET", "AZURE_OPENAI_ENDPOINT"]:
+            if key.startswith("YUIGATEWAY_") or key in [
+                "TENANT_ID",
+                "CLIENT_ID",
+                "CLIENT_SECRET",
+                "AZURE_OPENAI_ENDPOINT",
+            ]:
                 monkeypatch.delenv(key, raising=False)
 
         monkeypatch.setenv("YUIGATEWAY_API_KEY", "test-api-key-123")
@@ -142,28 +145,28 @@ class TestAuthenticationMiddleware:
         import sys
 
         # routesモジュールを削除してリロード
-        if 'gateway.routes' in sys.modules:
-            del sys.modules['gateway.routes']
-        if 'gateway.settings' in sys.modules:
-            del sys.modules['gateway.settings']
-        if 'gateway.auth' in sys.modules:
-            del sys.modules['gateway.auth']
-        if 'gateway.azure_proxy' in sys.modules:
-            del sys.modules['gateway.azure_proxy']
+        if "gateway.routes" in sys.modules:
+            del sys.modules["gateway.routes"]
+        if "gateway.settings" in sys.modules:
+            del sys.modules["gateway.settings"]
+        if "gateway.auth" in sys.modules:
+            del sys.modules["gateway.auth"]
+        if "gateway.azure_proxy" in sys.modules:
+            del sys.modules["gateway.azure_proxy"]
 
         from gateway import routes
 
         client = TestClient(routes.app)
 
         # APIキーなしでリクエスト
-        with patch('gateway.azure_proxy.get_proxy') as mock_proxy:
+        with patch("gateway.azure_proxy.get_proxy") as mock_proxy:
             mock_proxy.return_value.chat_completion = AsyncMock(return_value={})
             response = client.post(
                 "/v1/chat/completions",
                 json={
                     "model": "gpt-4",
-                    "messages": [{"role": "user", "content": "test"}]
-                }
+                    "messages": [{"role": "user", "content": "test"}],
+                },
             )
 
         # 403エラーが返ることを確認
@@ -176,6 +179,8 @@ class TestAuthenticationMiddleware:
         # このテストは実際の環境では動作するが、
         # モジュールリロードの問題があるためスキップ
         pass
+
+
 class TestRateLimiting:
     """4. レート制限のテスト"""
 
@@ -225,8 +230,9 @@ class TestDependencyVersions:
             if dep in dependencies:
                 version = str(dependencies[dep])
                 # バージョン制約があることを確認（^, >=, ~, ==のいずれか）
-                assert any(op in version for op in ["^", ">=", "~", "=="]), \
-                    f"{dep} should have version constraint, got: {version}"
+                assert any(
+                    op in version for op in ["^", ">=", "~", "=="]
+                ), f"{dep} should have version constraint, got: {version}"
 
 
 class TestSecurityIntegration:
@@ -237,10 +243,7 @@ class TestSecurityIntegration:
         from gateway.routes import logger
 
         # ロガーにSensitiveDataFilterが適用されていることを確認
-        has_filter = any(
-            isinstance(f, SensitiveDataFilter)
-            for f in logger.filters
-        )
+        has_filter = any(isinstance(f, SensitiveDataFilter) for f in logger.filters)
         assert has_filter, "SensitiveDataFilter should be applied to logger"
 
     def test_model_validation_prevents_injection(self):
@@ -260,7 +263,7 @@ class TestSecurityIntegration:
             with pytest.raises(ValidationError) as exc_info:
                 ChatCompletionRequest(
                     model=malicious_input,
-                    messages=[Message(role="user", content="test")]
+                    messages=[Message(role="user", content="test")],
                 )
 
             # バリデーションエラーメッセージにセキュリティ関連の情報が含まれることを確認
