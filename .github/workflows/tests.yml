@@ -28,7 +28,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install fastapi uvicorn[standard] msal httpx pydantic-settings python-dotenv
         pip install azure-identity azure-mgmt-resource azure-mgmt-authorization azure-mgmt-cognitiveservices
-        pip install jsonschema prometheus-client pyyaml
+        pip install jsonschema prometheus-client pyyaml tomli
         pip install pytest pytest-asyncio pytest-mock pytest-cov
 
     - name: Run tests with pytest

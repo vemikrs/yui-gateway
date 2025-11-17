@@ -54,7 +54,16 @@ class TestSystemIntegration:
         """テストクライアント
 
         Why: mock_settingsを追加して環境変数が設定されるようにする
+        テストクライアント作成前にシングルトンをリセットして新しい設定を反映
         """
+        # シングルトンインスタンスをリセット
+        from gateway.settings import SettingsManager
+        from gateway import auth, azure_proxy
+        
+        SettingsManager._instance = None
+        auth._authenticator_instance = None
+        azure_proxy._proxy_instance = None
+        
         return TestClient(app)
 
     @pytest.mark.asyncio
