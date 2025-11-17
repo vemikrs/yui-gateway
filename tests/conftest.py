@@ -4,14 +4,18 @@ Provides shared fixtures for mocking Azure AD and Azure OpenAI services.
 統合された新しいモック機能とテストユーティリティをサポート。
 """
 
+import os
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
 from tests.test_utils import (
-    MockAzureOpenAIService, TestDataFactory, MockPublicClientApplication,
-    MockRedisClient, create_mock_context_manager
+    MockAzureOpenAIService,
+    TestDataFactory,
+    MockPublicClientApplication,
+    MockRedisClient,
+    create_mock_context_manager,
 )
 
 
@@ -47,12 +51,17 @@ def mock_azure_endpoint() -> str:
 
 @pytest.fixture
 def mock_settings(
-    mock_tenant_id, mock_client_id, mock_client_secret, mock_azure_endpoint, monkeypatch, tmp_path
+    mock_tenant_id,
+    mock_client_id,
+    mock_client_secret,
+    mock_azure_endpoint,
+    monkeypatch,
+    tmp_path,
 ):
     """Mock settings for testing"""
-    # テスト用の一時ディレクトリに移動（config.yamlを読み込まないようにする）
-    monkeypatch.chdir(tmp_path)
-
+    # 完全な環境分離のため、全ての環境変数を明示的に設定
+    monkeypatch.setenv("CONFIG_AUTO_CREATE", "false")
+    monkeypatch.setenv("CONFIG_FILE", str(tmp_path / "nonexistent.yaml"))
     monkeypatch.setenv("TENANT_ID", mock_tenant_id)
     monkeypatch.setenv("CLIENT_ID", mock_client_id)
     monkeypatch.setenv("CLIENT_SECRET", mock_client_secret)
@@ -60,18 +69,11 @@ def mock_settings(
     monkeypatch.setenv("SCOPE", "https://cognitiveservices.azure.com/.default")
 
     # Re-import settings to pick up new environment variables
-    import importlib
-
     from gateway import settings as settings_module
+    from gateway.settings import SettingsManager
 
-    importlib.reload(settings_module)
-
-    # Reset singleton instances for clean test state
-    import gateway.auth
-    import gateway.azure_proxy
-
-    gateway.auth._authenticator_instance = None
-    gateway.azure_proxy._proxy_instance = None
+    # シングルトンをリセットして新しい環境変数を反映
+    SettingsManager._instance = None
 
     return settings_module.settings
 
@@ -142,6 +144,7 @@ def mock_httpx_response(sample_chat_response):
 
 # 新しいモック機能のフィクスチャ
 
+
 @pytest.fixture
 def mock_azure_service():
     """Mock Azure OpenAI service instance"""
@@ -170,8 +173,7 @@ def mock_redis_client():
 def sample_streaming_chunks():
     """Sample streaming response chunks"""
     return TestDataFactory.create_streaming_chunks(
-        content="This is a streaming response test.",
-        model="gpt-4"
+        content="This is a streaming response test.", model="gpt-4"
     )
 
 
@@ -181,30 +183,39 @@ def sample_error_response():
     return TestDataFactory.create_error_response(
         message="Invalid request parameters",
         error_type="invalid_request_error",
-        code="invalid_request"
+        code="invalid_request",
     )
 
 
 @pytest.fixture(autouse=True)
-def reset_singleton_instances():
+def reset_singleton_instances(monkeypatch, tmp_path):
     """各テスト前後にシングルトンインスタンスをリセット"""
+    # 外部設定ファイルの読み込みを完全に無効化
+    monkeypatch.setenv("CONFIG_AUTO_CREATE", "false")
+    monkeypatch.setenv("CONFIG_FILE", str(tmp_path / "nonexistent.yaml"))
+
+    # 必須環境変数を強制的に設定（既存の値を上書き）
+    # テスト間で一貫した値を使用
+    default_endpoint = "https://mock-resource.openai.azure.com"
+    monkeypatch.setenv("TENANT_ID", "00000000-0000-0000-0000-000000000000")
+    monkeypatch.setenv("CLIENT_ID", "11111111-1111-1111-1111-111111111111")
+    monkeypatch.setenv("CLIENT_SECRET", "mock_client_secret")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", default_endpoint)
+    monkeypatch.setenv("SCOPE", "https://cognitiveservices.azure.com/.default")
+
+    # テスト用の一時ディレクトリに移動（config.yamlを読み込まないようにする）
+    original_dir = os.getcwd()
+    os.chdir(tmp_path)
+
     # テスト前にリセット
     import gateway.auth
     import gateway.azure_proxy
+    from gateway.settings import SettingsManager
 
     gateway.auth._authenticator_instance = None
     gateway.azure_proxy._proxy_instance = None
+    SettingsManager._instance = None
 
-    yield
-
-    # テスト後にもリセット
-    gateway.auth._authenticator_instance = None
-    gateway.azure_proxy._proxy_instance = None
-
-
-@pytest.fixture(autouse=True)
-def setup_test_environment():
-    """自動実行されるテスト環境セットアップ"""
     # グローバルなモックインスタンスをリセット
     from tests.test_utils import mock_azure_service, mock_msal_app, mock_redis
 
@@ -214,6 +225,24 @@ def setup_test_environment():
     mock_redis.expiry.clear()
 
     yield
+
+    # 元のディレクトリに戻る
+    os.chdir(original_dir)
+
+    # テスト後にもリセット
+    gateway.auth._authenticator_instance = None
+    gateway.azure_proxy._proxy_instance = None
+    SettingsManager._instance = None
+
+    # テスト後クリーンアップ
+    mock_azure_service.clear_history()
+    mock_msal_app._tokens.clear()
+    mock_redis.data.clear()
+    mock_redis.expiry.clear()
+
+    gateway.auth._authenticator_instance = None
+    gateway.azure_proxy._proxy_instance = None
+    SettingsManager._instance = None
 
     # テスト後クリーンアップ
     mock_azure_service.clear_history()

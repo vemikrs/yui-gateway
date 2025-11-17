@@ -30,7 +30,7 @@ plugins:
 """
 
         config_file = tmp_path / "config.yaml"
-        with open(config_file, 'w') as f:
+        with open(config_file, "w") as f:
             f.write(yaml_content)
 
         config = ConfigLoader.load_config(str(config_file))
@@ -53,7 +53,7 @@ core:
 """
 
         config_file = tmp_path / "config.yaml"
-        with open(config_file, 'w') as f:
+        with open(config_file, "w") as f:
             f.write(yaml_content)
 
         config = ConfigLoader.load_config(str(config_file))
@@ -70,7 +70,7 @@ core:
 """
 
         config_file = tmp_path / "config.yaml"
-        with open(config_file, 'w') as f:
+        with open(config_file, "w") as f:
             f.write(yaml_content)
 
         config = ConfigLoader.load_config(str(config_file))
@@ -92,7 +92,7 @@ core:
       - gpt-5-mini
 """
         template_file = tmp_path / "config.yaml.template"
-        with open(template_file, 'w') as f:
+        with open(template_file, "w") as f:
             f.write(template_content)
 
         # config.yamlが存在しないことを確認
@@ -148,23 +148,9 @@ core:
 
     def test_merge_configs(self):
         """設定マージのテスト"""
-        base = {
-            "a": 1,
-            "b": {
-                "c": 2,
-                "d": 3
-            },
-            "e": [1, 2, 3]
-        }
+        base = {"a": 1, "b": {"c": 2, "d": 3}, "e": [1, 2, 3]}
 
-        override = {
-            "a": 10,
-            "b": {
-                "c": 20,
-                "f": 4
-            },
-            "g": 5
-        }
+        override = {"a": 10, "b": {"c": 20, "f": 4}, "g": 5}
 
         merged = ConfigLoader.merge_configs(base, override)
 
@@ -190,7 +176,7 @@ core:
 """
 
         config_file = tmp_path / "config.yaml"
-        with open(config_file, 'w') as f:
+        with open(config_file, "w") as f:
             f.write(yaml_content)
 
         config = ConfigLoader.load_config(str(config_file))
@@ -213,6 +199,9 @@ class TestSettingsWithExternalConfig:
         monkeypatch.setenv("CLIENT_ID", "test-client")
         monkeypatch.setenv("CLIENT_SECRET", "test-secret")
         monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
+        # CONFIG_FILEをカレントディレクトリのconfig.yamlに設定
+        monkeypatch.setenv("CONFIG_FILE", "config.yaml")
+        monkeypatch.setenv("CONFIG_AUTO_CREATE", "false")
 
         yaml_content = """
 core:
@@ -224,7 +213,7 @@ core:
 """
 
         config_file = tmp_path / "config.yaml"
-        with open(config_file, 'w') as f:
+        with open(config_file, "w") as f:
             f.write(yaml_content)
 
         from gateway.settings import Settings
@@ -233,7 +222,7 @@ core:
             tenant_id="test-tenant",
             client_id="test-client",
             client_secret="test-secret",
-            azure_openai_endpoint="https://test.openai.azure.com"
+            azure_openai_endpoint="https://test.openai.azure.com",
         )
 
         assert len(settings.available_models) == 3
@@ -250,6 +239,9 @@ core:
         monkeypatch.setenv("CLIENT_ID", "test-client")
         monkeypatch.setenv("CLIENT_SECRET", "test-secret")
         monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
+        # CONFIG_FILEをカレントディレクトリのconfig.yamlに設定
+        monkeypatch.setenv("CONFIG_FILE", "config.yaml")
+        monkeypatch.setenv("CONFIG_AUTO_CREATE", "false")
 
         yaml_content = """
 plugins:
@@ -261,7 +253,7 @@ plugins:
 """
 
         config_file = tmp_path / "config.yaml"
-        with open(config_file, 'w') as f:
+        with open(config_file, "w") as f:
             f.write(yaml_content)
 
         from gateway.settings import Settings
@@ -270,7 +262,7 @@ plugins:
             tenant_id="test-tenant",
             client_id="test-client",
             client_secret="test-secret",
-            azure_openai_endpoint="https://test.openai.azure.com"
+            azure_openai_endpoint="https://test.openai.azure.com",
         )
 
         assert settings.is_plugin_enabled("a5m2_compatibility")
