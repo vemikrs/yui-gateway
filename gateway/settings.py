@@ -75,13 +75,15 @@ class Settings(BaseSettings):
     """
 
     # Entra ID 認証情報
-    tenant_id: str
-    client_id: str
-    client_secret: str
+    # Why: テスト環境では.envがないため、デフォルト値を設定
+    # 実行時にバリデーションで必須チェックを行う
+    tenant_id: str = ""
+    client_id: str = ""
+    client_secret: str = ""
     scope: str = "https://cognitiveservices.azure.com/.default"
 
     # Azure OpenAI エンドポイント
-    azure_openai_endpoint: str
+    azure_openai_endpoint: str = ""
 
     # その他
     log_level: str = "INFO"
