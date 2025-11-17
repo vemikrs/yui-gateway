@@ -21,15 +21,17 @@ class TestAzureOpenAIProxy:
     def test_init_sets_endpoint_and_client(self, mock_settings):
         """Test that __init__ properly initializes endpoint and HTTP client"""
         with patch("gateway.azure_proxy.httpx.AsyncClient") as mock_client_class:
-            from gateway.azure_proxy import AzureOpenAIProxy
+            # Ensure settings are properly mocked
+            with patch("gateway.azure_proxy.settings", mock_settings):
+                from gateway.azure_proxy import AzureOpenAIProxy
 
-            proxy = AzureOpenAIProxy()
+                proxy = AzureOpenAIProxy()
 
-            # Verify endpoint is set correctly (trailing slash removed)
-            assert proxy.endpoint == mock_settings.azure_openai_endpoint.rstrip("/")
+                # Verify endpoint is set correctly (trailing slash removed)
+                assert proxy.endpoint == mock_settings.azure_openai_endpoint.rstrip("/")
 
-            # Verify async client was created with timeout
-            mock_client_class.assert_called_once_with(timeout=120.0)
+                # Verify async client was created with timeout
+                mock_client_class.assert_called_once_with(timeout=120.0)
 
     @pytest.mark.asyncio
     async def test_chat_completion_success(

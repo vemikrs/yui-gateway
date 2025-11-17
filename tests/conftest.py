@@ -68,14 +68,17 @@ def mock_settings(
     monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", mock_azure_endpoint)
     monkeypatch.setenv("SCOPE", "https://cognitiveservices.azure.com/.default")
 
+    # .envファイルの読み込みを無効化（tmpディレクトリに移動）
+    monkeypatch.chdir(tmp_path)
+
     # Re-import settings to pick up new environment variables
-    from gateway import settings as settings_module
     from gateway.settings import SettingsManager
 
     # シングルトンをリセットして新しい環境変数を反映
     SettingsManager._instance = None
 
-    return settings_module.settings
+    # 新しい設定インスタンスを取得
+    return SettingsManager.get_settings()
 
 
 @pytest.fixture

@@ -82,7 +82,9 @@ async def graph_request(
     client: httpx.AsyncClient, method: str, url: str, token: str, **kwargs
 ):
     headers = kwargs.pop("headers", {})
-    headers.update({"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+    headers.update(
+        {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    )
     return await client.request(method, url, headers=headers, **kwargs)
 
 
@@ -94,7 +96,9 @@ def get_tenant_id_from_token(token: str) -> Optional[str]:
 async def get_tenant_id(credential: DefaultAzureCredential) -> str:
     token = credential.get_token("https://graph.microsoft.com/.default").token
     async with httpx.AsyncClient(timeout=30) as client:
-        resp = await graph_request(client, "GET", "https://graph.microsoft.com/v1.0/organization", token)
+        resp = await graph_request(
+            client, "GET", "https://graph.microsoft.com/v1.0/organization", token
+        )
         resp.raise_for_status()
         data = resp.json()
         orgs = data.get("value", [])
@@ -177,21 +181,28 @@ def list_openai_accounts(credential) -> List[OpenAIAccount]:
         # REST fallback (authoritative API version)
         if not found_any:
             try:
-                token = credential.get_token("https://management.azure.com/.default").token
+                token = credential.get_token(
+                    "https://management.azure.com/.default"
+                ).token
                 url = f"https://management.azure.com/subscriptions/{sub_id}/providers/Microsoft.CognitiveServices/accounts?api-version=2024-10-01"
+
                 async def _fetch_all(u: str) -> List[dict]:
                     out: List[dict] = []
                     async with httpx.AsyncClient(timeout=60) as client:
                         next_url = u
                         while next_url:
-                            resp = await client.get(next_url, headers={"Authorization": f"Bearer {token}"})
+                            resp = await client.get(
+                                next_url, headers={"Authorization": f"Bearer {token}"}
+                            )
                             resp.raise_for_status()
                             data = resp.json()
                             out.extend(data.get("value", []))
                             next_url = data.get("nextLink")
                     return out
+
                 # Run the coroutine synchronously since we are in sync function
                 import asyncio as _asyncio
+
                 try:
                     loop = _asyncio.get_running_loop()
                     # We're already in async context, can't nest
@@ -206,9 +217,13 @@ def list_openai_accounts(credential) -> List[OpenAIAccount]:
                         if kind not in ("openai", "aiservices"):
                             continue
                         rid = it.get("id")
-                        rg = rid.split("/resourceGroups/")[1].split("/")[0] if rid else ""
+                        rg = (
+                            rid.split("/resourceGroups/")[1].split("/")[0]
+                            if rid
+                            else ""
+                        )
                         name = it.get("name")
-                        endpoint = (((it.get("properties") or {}).get("endpoint")) or "")
+                        endpoint = ((it.get("properties") or {}).get("endpoint")) or ""
                         if rid and name and endpoint:
                             accounts.append(
                                 OpenAIAccount(
@@ -246,7 +261,9 @@ def resolve_account(
 
     accounts = list_openai_accounts(credential)
     if not accounts:
-        raise RuntimeError("Azure OpenAI リソースが見つかりません。--subscription-id/--resource-group/--account-name を指定してください。")
+        raise RuntimeError(
+            "Azure OpenAI リソースが見つかりません。--subscription-id/--resource-group/--account-name を指定してください。"
+        )
     # Prefer single; if multiple, pick the first for non-interactive simplicity
     return accounts[0]
 
@@ -254,7 +271,9 @@ def resolve_account(
 def select_account_interactive(accounts: List[OpenAIAccount]) -> OpenAIAccount:
     print("複数の Azure OpenAI リソースが見つかりました。番号を選択してください:\n")
     for i, a in enumerate(accounts):
-        print(f"[{i}] sub={a.subscription_id} rg={a.resource_group} name={a.name} endpoint={a.endpoint}")
+        print(
+            f"[{i}] sub={a.subscription_id} rg={a.resource_group} name={a.name} endpoint={a.endpoint}"
+        )
     while True:
         raw = input("選択番号 (Enterで0): ")
         s = (raw or "").strip()
@@ -277,10 +296,14 @@ def resolve_account_with_selection(
 ) -> OpenAIAccount:
     """Resolve account; optionally prompt user when multiple are found."""
     if subscription_id and resource_group and account_name:
-        return resolve_account(credential, subscription_id, resource_group, account_name)
+        return resolve_account(
+            credential, subscription_id, resource_group, account_name
+        )
     accounts = list_openai_accounts(credential)
     if not accounts:
-        raise RuntimeError("Azure OpenAI リソースが見つかりません。ポータルで作成してから再実行してください。")
+        raise RuntimeError(
+            "Azure OpenAI リソースが見つかりません。ポータルで作成してから再実行してください。"
+        )
     if enable_select and len(accounts) > 1:
         return select_account_interactive(accounts)
     return accounts[0]
@@ -299,8 +322,9 @@ async def ensure_application(
     token = credential.get_token("https://graph.microsoft.com/.default").token
     async with httpx.AsyncClient(timeout=60) as client:
         # Try to find existing application by displayName
-        url = "https://graph.microsoft.com/v1.0/applications?$select=id,appId,displayName&$filter=" \
-              f"displayName eq '{display_name.replace("'", "''")}'"
+        # Why: Escape single quotes for OData query syntax
+        escaped_name = display_name.replace("'", "''")
+        url = f"https://graph.microsoft.com/v1.0/applications?$select=id,appId,displayName&$filter=displayName eq '{escaped_name}'"
         resp = await graph_request(client, "GET", url, token)
         resp.raise_for_status()
         items = resp.json().get("value", [])
@@ -309,7 +333,13 @@ async def ensure_application(
         else:
             # Create application
             payload = {"displayName": display_name}
-            resp = await graph_request(client, "POST", "https://graph.microsoft.com/v1.0/applications", token, json=payload)
+            resp = await graph_request(
+                client,
+                "POST",
+                "https://graph.microsoft.com/v1.0/applications",
+                token,
+                json=payload,
+            )
             resp.raise_for_status()
             app = resp.json()
 
@@ -319,7 +349,11 @@ async def ensure_application(
         # Create client secret
         pwd_payload = {"passwordCredential": {"displayName": "yui-gateway-secret"}}
         resp = await graph_request(
-            client, "POST", f"https://graph.microsoft.com/v1.0/applications/{app_obj_id}/addPassword", token, json=pwd_payload
+            client,
+            "POST",
+            f"https://graph.microsoft.com/v1.0/applications/{app_obj_id}/addPassword",
+            token,
+            json=pwd_payload,
         )
         resp.raise_for_status()
         secret = resp.json().get("secretText")
@@ -348,7 +382,13 @@ async def ensure_service_principal(
 
         # Create
         payload = {"appId": client_id}
-        resp = await graph_request(client, "POST", "https://graph.microsoft.com/v1.0/servicePrincipals", token, json=payload)
+        resp = await graph_request(
+            client,
+            "POST",
+            "https://graph.microsoft.com/v1.0/servicePrincipals",
+            token,
+            json=payload,
+        )
         resp.raise_for_status()
         return resp.json()["id"]
 
@@ -361,7 +401,9 @@ def assign_cog_user_role(
 ) -> None:
     auth = AuthorizationManagementClient(credential, subscription_id)
     # Find role definition for "Cognitive Services User"
-    defs = auth.role_definitions.list(resource_scope, filter="roleName eq 'Cognitive Services User'")
+    defs = auth.role_definitions.list(
+        resource_scope, filter="roleName eq 'Cognitive Services User'"
+    )
     role_def_id = None
     for d in defs:
         role_def_id = d.id
@@ -370,13 +412,15 @@ def assign_cog_user_role(
         raise RuntimeError("'Cognitive Services User' ロール定義が見つかりません")
 
     params = RoleAssignmentCreateParameters(
-        role_definition_id=role_def_id, 
+        role_definition_id=role_def_id,
         principal_id=principal_object_id,
-        principal_type="ServicePrincipal"  # Handle replication delay
+        principal_type="ServicePrincipal",  # Handle replication delay
     )
     name = str(uuid4())
     try:
-        auth.role_assignments.create(scope=resource_scope, role_assignment_name=name, parameters=params)
+        auth.role_assignments.create(
+            scope=resource_scope, role_assignment_name=name, parameters=params
+        )
     except Exception as e:
         # Might already exist; attempt to ignore duplicates
         message = str(e)
@@ -411,7 +455,9 @@ def update_env(env_path: Path, values: dict) -> None:
 
 
 def parse_args(argv: List[str]) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Provision Azure + generate .env for YuiGateway")
+    p = argparse.ArgumentParser(
+        description="Provision Azure + generate .env for YuiGateway"
+    )
     p.add_argument("--subscription-id")
     p.add_argument("--resource-group")
     p.add_argument("--account-name")
@@ -424,7 +470,9 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         help="認証方法を指定 (interactive/cli/devicecode)",
     )
     p.add_argument("--tenant-id", help="対象テナントIDを明示してログイン/探索を実行")
-    p.add_argument("--select-tenant", action="store_true", help="複数テナントから対話的に選択する")
+    p.add_argument(
+        "--select-tenant", action="store_true", help="複数テナントから対話的に選択する"
+    )
     p.add_argument(
         "--select",
         action="store_true",
@@ -445,8 +493,14 @@ async def main(argv: List[str]) -> int:
     if args.select_tenant and not args.tenant_id:
         tenants = await list_tenants(cred)
         if not tenants:
-            raise RuntimeError("利用可能なテナントが見つかりませんでした。権限を確認してください。")
-        chosen = tenants[0]["id"] if len(tenants) == 1 else select_tenant_interactive(tenants)
+            raise RuntimeError(
+                "利用可能なテナントが見つかりませんでした。権限を確認してください。"
+            )
+        chosen = (
+            tenants[0]["id"]
+            if len(tenants) == 1
+            else select_tenant_interactive(tenants)
+        )
         os.environ["YUI_TENANT_ID"] = chosen
         cred = get_credential()
 
@@ -458,7 +512,9 @@ async def main(argv: List[str]) -> int:
             cred, args.subscription_id, args.resource_group, args.account_name, True
         )
     else:
-        acct = resolve_account(cred, args.subscription_id, args.resource_group, args.account_name)
+        acct = resolve_account(
+            cred, args.subscription_id, args.resource_group, args.account_name
+        )
 
     # Create App + Secret + SP
     app_obj_id, client_id, client_secret = await ensure_application(cred, args.app_name)

@@ -31,15 +31,6 @@ class TestSystemIntegration:
     """システム統合テストクラス"""
 
     @pytest.fixture
-    def mock_settings(self):
-        """モック設定"""
-        # settingsはroutes.pyにインポートされていないため、
-        # 直接gateway.settingsをパッチする必要がある
-        # しかし、TestClientは既にアプリを起動しているため、
-        # 環境変数を使用する方が適切
-        return None  # 環境変数はconftest.pyで設定済み
-
-    @pytest.fixture
     def mock_auth(self):
         """モック認証"""
         with patch("msal.PublicClientApplication") as mock_msal:
@@ -59,8 +50,11 @@ class TestSystemIntegration:
             yield service
 
     @pytest.fixture
-    def test_client(self, mock_auth):
-        """テストクライアント"""
+    def test_client(self, mock_auth, mock_settings):
+        """テストクライアント
+
+        Why: mock_settingsを追加して環境変数が設定されるようにする
+        """
         return TestClient(app)
 
     @pytest.mark.asyncio

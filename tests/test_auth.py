@@ -14,19 +14,21 @@ class TestEntraIDAuthenticator:
     def test_init_creates_msal_app(self, mock_settings):
         """Test that __init__ creates a ConfidentialClientApplication"""
         with patch("gateway.auth.ConfidentialClientApplication") as mock_app_class:
-            from gateway.auth import EntraIDAuthenticator
+            # Ensure settings are properly mocked
+            with patch("gateway.auth.settings", mock_settings):
+                from gateway.auth import EntraIDAuthenticator
 
-            authenticator = EntraIDAuthenticator()
+                authenticator = EntraIDAuthenticator()
 
-            # Verify MSAL app was created with correct parameters
-            mock_app_class.assert_called_once_with(
-                client_id=mock_settings.client_id,
-                client_credential=mock_settings.client_secret,
-                authority=f"https://login.microsoftonline.com/{mock_settings.tenant_id}",
-            )
+                # Verify MSAL app was created with correct parameters
+                mock_app_class.assert_called_once_with(
+                    client_id=mock_settings.client_id,
+                    client_credential=mock_settings.client_secret,
+                    authority=f"https://login.microsoftonline.com/{mock_settings.tenant_id}",
+                )
 
-            # Verify scope was set
-            assert authenticator.scope == [mock_settings.scope]
+                # Verify scope was set
+                assert authenticator.scope == [mock_settings.scope]
 
     def test_get_token_from_cache_success(self, mock_settings, mock_token):
         """Test successful token retrieval from cache"""
