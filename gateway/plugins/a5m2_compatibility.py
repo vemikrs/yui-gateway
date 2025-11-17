@@ -19,8 +19,9 @@ class A5M2CompatibilityMiddleware(MiddlewarePlugin):
     この機能はオプションであり、明示的に有効化した場合のみ動作します。
     """
 
-    def __init__(self):
-        self._metadata = PluginMetadata(
+    @property
+    def metadata(self) -> PluginMetadata:
+        return PluginMetadata(
             name="a5m2_compatibility",
             version="1.0.0",
             description="A5M2ツール用のモデル名変換ミドルウェア",
@@ -30,25 +31,33 @@ class A5M2CompatibilityMiddleware(MiddlewarePlugin):
             dependencies=[],
             enabled=False  # デフォルトでは無効
         )
-        super().__init__()
 
-        # モデルエイリアスは設定から読み込む（デフォルトは空）
-        self.model_aliases: Dict[str, str] = {}    @property
-    def metadata(self) -> PluginMetadata:
-        return self._metadata
+    def __init__(self):
+        # デフォルトのモデルエイリアス（A5M2互換性のため）
+        self.model_aliases: Dict[str, str] = {
+            "gpt-4": "gpt-5-mini",
+            "gpt-4-turbo": "gpt-5-mini",
+            "gpt-4o": "gpt-4o",
+            "gpt-3.5-turbo": "gpt-35-turbo",
+            "gpt-35-turbo": "gpt-35-turbo",
+        }
+        super().__init__()
 
     async def initialize(self) -> bool:
         """プラグイン初期化"""
+        self.is_initialized = True
         logger.info("A5M2 Compatibility Middleware initialized")
         return True
 
     async def enable(self) -> bool:
         """プラグイン有効化"""
+        self.is_enabled = True
         logger.info("A5M2 Compatibility Middleware enabled - Model name translation active")
         return True
 
     async def disable(self) -> bool:
         """プラグイン無効化"""
+        self.is_enabled = False
         logger.info("A5M2 Compatibility Middleware disabled")
         return True
 

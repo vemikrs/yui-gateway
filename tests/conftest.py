@@ -186,6 +186,23 @@ def sample_error_response():
 
 
 @pytest.fixture(autouse=True)
+def reset_singleton_instances():
+    """各テスト前後にシングルトンインスタンスをリセット"""
+    # テスト前にリセット
+    import gateway.auth
+    import gateway.azure_proxy
+
+    gateway.auth._authenticator_instance = None
+    gateway.azure_proxy._proxy_instance = None
+
+    yield
+
+    # テスト後にもリセット
+    gateway.auth._authenticator_instance = None
+    gateway.azure_proxy._proxy_instance = None
+
+
+@pytest.fixture(autouse=True)
 def setup_test_environment():
     """自動実行されるテスト環境セットアップ"""
     # グローバルなモックインスタンスをリセット

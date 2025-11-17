@@ -8,24 +8,65 @@ lifespan ハンドラに移行する（2025 互換性対応）。
 """
 
 import logging
+import re
 from typing import Any
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, ValidationError
+from fastapi.security import APIKeyHeader
+from pydantic import BaseModel, ValidationError, field_validator
 import json
 import uuid
 from datetime import datetime
 
 from gateway import azure_proxy
+from gateway.caching import cache_manager
+
+# ログサニタイゼーション用フィルタ
+class SensitiveDataFilter(logging.Filter):
+    """機密情報をマスクするログフィルタ"""
+    SENSITIVE_PATTERNS = [
+        (re.compile(r'Bearer [A-Za-z0-9\-._~+/]+=*', re.IGNORECASE), 'Bearer [REDACTED]'),
+        (re.compile(r'"api[_-]?key"\s*:\s*"[^"]+"', re.IGNORECASE), '"api_key": "[REDACTED]"'),
+        (re.compile(r'"client[_-]?secret"\s*:\s*"[^"]+"', re.IGNORECASE), '"client_secret": "[REDACTED]"'),
+        (re.compile(r'"password"\s*:\s*"[^"]+"', re.IGNORECASE), '"password": "[REDACTED]"'),
+        (re.compile(r'"token"\s*:\s*"[^"]+"', re.IGNORECASE), '"token": "[REDACTED]"'),
+    ]
+
+    def filter(self, record):
+        message = record.getMessage()
+        for pattern, replacement in self.SENSITIVE_PATTERNS:
+            message = pattern.sub(replacement, message)
+        record.msg = message
+        record.args = ()
+        return True
 
 # ロギング設定
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+logger.addFilter(SensitiveDataFilter())
+
+# セキュリティ: API認証（オプション、環境変数で有効化）
+import os
+API_KEY_NAME = "X-API-Key"
+API_KEY = os.getenv("YUIGATEWAY_API_KEY")  # 設定されている場合のみ認証を要求
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+async def verify_api_key(api_key: str = Depends(api_key_header)):
+    """API キー認証（設定されている場合のみ）"""
+    if API_KEY is None:
+        # API_KEYが未設定の場合は認証をスキップ（開発モード）
+        return None
+    if api_key is None or api_key != API_KEY:
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid or missing API key"
+        )
+    return api_key
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -114,6 +155,19 @@ class ChatCompletionRequest(BaseModel):
     presence_penalty: float | None = 0.0
     frequency_penalty: float | None = 0.0
 
+    @field_validator('model')
+    @classmethod
+    def validate_model_name(cls, v: str) -> str:
+        """モデル名のバリデーション（セキュリティ: インジェクション防止）"""
+        # 許可される文字: 英数字、ハイフン、アンダースコア、ドット
+        if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$', v):
+            raise ValueError(
+                f"Invalid model name format: {v}. "
+                "Model names must start with alphanumeric and contain only "
+                "alphanumeric, dots, hyphens, or underscores (max 128 chars)."
+            )
+        return v
+
 
 # === エンドポイント ===
 
@@ -138,7 +192,11 @@ async def health():
 
 
 @app.post("/v1/chat/completions")
-async def chat_completions(request: ChatCompletionRequest):
+async def chat_completions(
+    request: ChatCompletionRequest,
+    client_request: Request,
+    api_key: str = Depends(verify_api_key)
+):
     """チャット補完エンドポイント（OpenAI 互換）
 
     OpenAI API の /v1/chat/completions と同じインターフェースを提供。
@@ -146,6 +204,8 @@ async def chat_completions(request: ChatCompletionRequest):
 
     Args:
         request: チャット補完リクエスト
+        client_request: FastAPIリクエストオブジェクト
+        api_key: API認証キー（設定されている場合）
 
     Returns:
         Dict[str, Any]: Azure OpenAI からのレスポンス
@@ -153,17 +213,32 @@ async def chat_completions(request: ChatCompletionRequest):
     Raises:
         HTTPException: プロキシ処理に失敗した場合
     """
-    # A5M2 デバッグのための詳細ログ
+    # セキュリティ修正4: レート制限チェック
+    client_ip = client_request.client.host if client_request.client else "unknown"
+    rate_limit_key = f"ip:{client_ip}"
+    allowed, rate_info = await cache_manager.check_rate_limit(rate_limit_key)
+
+    if not allowed:
+        logger.warning(f"Rate limit exceeded for {client_ip}")
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limit_exceeded",
+                "message": "Too many requests",
+                "retry_after": int(rate_info.reset_time - rate_info.window_start)
+            }
+        )
+
+    # セキュリティ修正1: 機密情報をログに出力しない（サニタイズ済み）
     logger.info(f"=== Chat Completion Request ===")
     logger.info(f"Model: {request.model}")
     logger.info(f"Messages count: {len(request.messages)}")
     logger.info(f"Temperature: {request.temperature}")
     logger.info(f"Max tokens: {request.max_tokens}")
     logger.info(f"Stream: {request.stream}")
+    logger.info(f"Client IP: {client_ip}")
 
-    # メッセージ内容をログ（デバッグレベル）
-    for i, msg in enumerate(request.messages):
-        logger.debug(f"Message {i}: {msg.role} - {msg.content[:100]}...")
+    # メッセージ内容はログに出力しない（セキュリティ修正）
 
     try:
         # リクエストを辞書に変換

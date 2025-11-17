@@ -76,6 +76,8 @@ class BasePlugin(ABC):
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
+        self.is_enabled = False
+        self.is_initialized = False
         self.logger = logging.getLogger(f"plugin.{self.metadata.name}")
 
     @property
@@ -86,10 +88,22 @@ class BasePlugin(ABC):
 
     async def initialize(self) -> bool:
         """プラグイン初期化（オプション）"""
+        self.is_initialized = True
+        return True
+
+    async def enable(self) -> bool:
+        """プラグイン有効化（オプション）"""
+        self.is_enabled = True
+        return True
+
+    async def disable(self) -> bool:
+        """プラグイン無効化（オプション）"""
+        self.is_enabled = False
         return True
 
     async def shutdown(self):
         """プラグイン終了処理（オプション）"""
+        self.is_initialized = False
         pass
 
     def validate_config(self) -> bool:

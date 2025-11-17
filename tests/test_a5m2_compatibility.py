@@ -171,25 +171,28 @@ class TestA5M2MiddlewareIntegration:
     """A5M2ミドルウェアの統合テスト"""
 
     @pytest.mark.asyncio
-    async def test_middleware_with_settings_integration(self):
+    async def test_middleware_with_settings_integration(self, monkeypatch):
         """設定システムとの統合テスト"""
-        from gateway.settings import Settings
+        # 環境変数を設定してSettings初期化エラーを回避
+        monkeypatch.setenv("TENANT_ID", "test-tenant")
+        monkeypatch.setenv("CLIENT_ID", "test-client")
+        monkeypatch.setenv("CLIENT_SECRET", "test-secret")
+        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
+        monkeypatch.setenv("CONFIG_AUTO_CREATE", "false")
+
+        from gateway.settings import Settings, SettingsManager
 
         # A5M2互換機能を有効にした設定
-        settings = Settings(
-            tenant_id="test-tenant",
-            client_id="test-client",
-            client_secret="test-secret",
-            azure_openai_endpoint="https://test.openai.azure.com",
-            plugin_settings={
-                "a5m2_compatibility": {
-                    "enabled": True,
-                    "model_aliases": {
-                        "gpt-4": "my-custom-gpt4"
-                    }
+        settings = Settings()
+        # plugin_settingsを直接更新
+        settings.plugin_settings = {
+            "a5m2_compatibility": {
+                "enabled": True,
+                "model_aliases": {
+                    "gpt-4": "my-custom-gpt4"
                 }
             }
-        )
+        }
 
         # プラグイン設定の確認
         assert settings.is_plugin_enabled("a5m2_compatibility")
