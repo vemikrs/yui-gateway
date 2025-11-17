@@ -24,14 +24,28 @@ from datetime import datetime
 from gateway import azure_proxy
 from gateway.caching import cache_manager
 
+
 # ログサニタイゼーション用フィルタ
 class SensitiveDataFilter(logging.Filter):
     """機密情報をマスクするログフィルタ"""
+
     SENSITIVE_PATTERNS = [
-        (re.compile(r'Bearer [A-Za-z0-9\-._~+/]+=*', re.IGNORECASE), 'Bearer [REDACTED]'),
-        (re.compile(r'"api[_-]?key"\s*:\s*"[^"]+"', re.IGNORECASE), '"api_key": "[REDACTED]"'),
-        (re.compile(r'"client[_-]?secret"\s*:\s*"[^"]+"', re.IGNORECASE), '"client_secret": "[REDACTED]"'),
-        (re.compile(r'"password"\s*:\s*"[^"]+"', re.IGNORECASE), '"password": "[REDACTED]"'),
+        (
+            re.compile(r"Bearer [A-Za-z0-9\-._~+/]+=*", re.IGNORECASE),
+            "Bearer [REDACTED]",
+        ),
+        (
+            re.compile(r'"api[_-]?key"\s*:\s*"[^"]+"', re.IGNORECASE),
+            '"api_key": "[REDACTED]"',
+        ),
+        (
+            re.compile(r'"client[_-]?secret"\s*:\s*"[^"]+"', re.IGNORECASE),
+            '"client_secret": "[REDACTED]"',
+        ),
+        (
+            re.compile(r'"password"\s*:\s*"[^"]+"', re.IGNORECASE),
+            '"password": "[REDACTED]"',
+        ),
         (re.compile(r'"token"\s*:\s*"[^"]+"', re.IGNORECASE), '"token": "[REDACTED]"'),
     ]
 
@@ -43,6 +57,7 @@ class SensitiveDataFilter(logging.Filter):
         record.args = ()
         return True
 
+
 # ロギング設定
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -52,21 +67,30 @@ logger.addFilter(SensitiveDataFilter())
 
 # セキュリティ: API認証（オプション、環境変数で有効化）
 import os
+from gateway.settings import SettingsManager
+
 API_KEY_NAME = "X-API-Key"
-API_KEY = os.getenv("YUIGATEWAY_API_KEY")  # 設定されている場合のみ認証を要求
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
+
 async def verify_api_key(api_key: str = Depends(api_key_header)):
-    """API キー認証（設定されている場合のみ）"""
-    if API_KEY is None:
+    """API キー認証（設定されている場合のみ）
+
+    Why: グローバル変数ではなく SettingsManager.get_settings() から取得することで、
+    テスト時に環境変数を変更→SettingsManager.reset→検証が可能になる。
+    モジュールリロードに依存しない安定したテスト設計。
+    """
+    # Settings から API キーを取得（実行時評価）
+    current_settings = SettingsManager.get_settings()
+    configured_key = current_settings.yuigateway_api_key
+
+    if configured_key is None:
         # API_KEYが未設定の場合は認証をスキップ（開発モード）
         return None
-    if api_key is None or api_key != API_KEY:
-        raise HTTPException(
-            status_code=403,
-            detail="Invalid or missing API key"
-        )
+    if api_key is None or api_key != configured_key:
+        raise HTTPException(status_code=403, detail="Invalid or missing API key")
     return api_key
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -108,12 +132,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "field": " -> ".join(str(loc) for loc in error["loc"][1:]),  # "body" を除去
             "message": error["msg"],
             "type": error["type"],
-            "input": error.get("input")
+            "input": error.get("input"),
         }
 
         # A5M2互換性: modelフィールドが欠けている場合の特別なヘルプメッセージ
         if error["type"] == "missing" and "model" in error["loc"]:
-            error_detail["help"] = "A5M2 users: Make sure to include the 'model' field in your request. Example: {'model': 'gpt-4', ...}"
+            error_detail["help"] = (
+                "A5M2 users: Make sure to include the 'model' field in your request. Example: {'model': 'gpt-4', ...}"
+            )
 
         errors.append(error_detail)
 
@@ -126,9 +152,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "help": "Check that your request matches the OpenAI chat completions API format",
             "common_issues": {
                 "missing_model": "A5M2 users should include 'model' field (e.g., 'gpt-4')",
-                "streaming": "Streaming is now supported! Use 'stream': true for real-time responses"
-            }
-        }
+                "streaming": "Streaming is now supported! Use 'stream': true for real-time responses",
+            },
+        },
     )
 
 
@@ -155,12 +181,12 @@ class ChatCompletionRequest(BaseModel):
     presence_penalty: float | None = 0.0
     frequency_penalty: float | None = 0.0
 
-    @field_validator('model')
+    @field_validator("model")
     @classmethod
     def validate_model_name(cls, v: str) -> str:
         """モデル名のバリデーション（セキュリティ: インジェクション防止）"""
         # 許可される文字: 英数字、ハイフン、アンダースコア、ドット
-        if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$', v):
+        if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$", v):
             raise ValueError(
                 f"Invalid model name format: {v}. "
                 "Model names must start with alphanumeric and contain only "
@@ -181,7 +207,7 @@ async def root():
         "description": "Entra ID-based local proxy to Azure OpenAI",
         "endpoints": ["/v1/chat/completions"],
         "features": ["streaming", "model_mapping", "enhanced_error_handling"],
-        "streaming": "Supported via 'stream': true parameter"
+        "streaming": "Supported via 'stream': true parameter",
     }
 
 
@@ -195,7 +221,7 @@ async def health():
 async def chat_completions(
     request: ChatCompletionRequest,
     client_request: Request,
-    api_key: str = Depends(verify_api_key)
+    api_key: str = Depends(verify_api_key),
 ):
     """チャット補完エンドポイント（OpenAI 互換）
 
@@ -225,8 +251,8 @@ async def chat_completions(
             detail={
                 "error": "rate_limit_exceeded",
                 "message": "Too many requests",
-                "retry_after": int(rate_info.reset_time - rate_info.window_start)
-            }
+                "retry_after": int(rate_info.reset_time - rate_info.window_start),
+            },
         )
 
     # セキュリティ修正1: 機密情報をログに出力しない（サニタイズ済み）
@@ -249,15 +275,17 @@ async def chat_completions(
             logger.info("Processing streaming request")
             return StreamingResponse(
                 stream_chat_completion(request_dict),
-                media_type="text/plain",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
             )
         else:
             # 通常のレスポンス
             response = await azure_proxy.get_proxy().chat_completion(request_dict)
 
             # レスポンス情報をログ
-            logger.info(f"Response received - Model: {response.get('model', 'unknown')}")
+            logger.info(
+                f"Response received - Model: {response.get('model', 'unknown')}"
+            )
             logger.info(f"Usage: {response.get('usage', {})}")
             logger.info(f"=== Request completed successfully ===")
 
@@ -271,7 +299,21 @@ async def chat_completions(
         if "404 DeploymentNotFound" in error_detail:
             # デプロイメント名エラーの場合、利用可能なモデルを提案
             from gateway.settings import settings
-            available_models = list(settings.model_mapping.keys())
+
+            # model_mappingsからモデル名を取得（空の場合はavailable_modelsを使用）
+            if settings.model_mappings:
+                available_models = [
+                    (
+                        m.get("source_model")
+                        if isinstance(m, dict)
+                        else getattr(m, "source_model", None)
+                    )
+                    for m in settings.model_mappings
+                ]
+                available_models = [m for m in available_models if m]  # None除外
+            else:
+                available_models = settings.available_models
+
             raise HTTPException(
                 status_code=404,
                 detail={
@@ -279,8 +321,8 @@ async def chat_completions(
                     "message": f"The specified model deployment was not found",
                     "requested_model": request.model,
                     "available_models": available_models,
-                    "help": "Use one of the available model names or check your Azure OpenAI deployment"
-                }
+                    "help": "Use one of the available model names or check your Azure OpenAI deployment",
+                },
             ) from e
 
         raise HTTPException(
@@ -315,7 +357,7 @@ async def stream_chat_completion(request_dict: dict[str, Any]):
             "error": {
                 "message": str(e),
                 "type": "stream_error",
-                "code": "internal_error"
+                "code": "internal_error",
             }
         }
         yield f"data: {json.dumps(error_chunk, ensure_ascii=False)}\n\n"
@@ -330,5 +372,6 @@ async def shutdown_event():
     """
     proxy = azure_proxy.get_proxy()
     await proxy.close()
+
 
 # 旧 on_event("shutdown") は lifespan に置換済み
