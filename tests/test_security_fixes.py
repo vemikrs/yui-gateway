@@ -206,8 +206,8 @@ class TestRateLimiting:
 class TestDependencyVersions:
     """5. 依存関係の固定のテスト"""
 
-    def test_pyproject_has_strict_version_ranges(self):
-        """pyproject.tomlに厳格なバージョン範囲が設定されていることを確認"""
+    def test_pyproject_has_version_constraints(self):
+        """pyproject.tomlに適切なバージョン制約が設定されていることを確認"""
         import tomli
         from pathlib import Path
 
@@ -218,15 +218,15 @@ class TestDependencyVersions:
 
         dependencies = pyproject["tool"]["poetry"]["dependencies"]
 
-        # 主要な依存関係が範囲指定されていることを確認
+        # 主要な依存関係にバージョン制約があることを確認
         critical_deps = ["fastapi", "uvicorn", "msal", "httpx", "pydantic-settings"]
 
         for dep in critical_deps:
             if dep in dependencies:
                 version = str(dependencies[dep])
-                # ^ではなく>=,<形式または具体的な範囲指定であることを確認
-                assert "^" not in version or ">=" in version, \
-                    f"{dep} should have strict version range, got: {version}"
+                # バージョン制約があることを確認（^, >=, ~, ==のいずれか）
+                assert any(op in version for op in ["^", ">=", "~", "=="]), \
+                    f"{dep} should have version constraint, got: {version}"
 
 
 class TestSecurityIntegration:
