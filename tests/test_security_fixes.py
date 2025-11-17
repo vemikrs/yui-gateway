@@ -120,57 +120,62 @@ class TestInputValidation:
 class TestAuthenticationMiddleware:
     """3. 認証ミドルウェアのテスト"""
 
-    @pytest.mark.skip(reason="Module reload issues in test environment")
-    def test_api_key_required_when_configured(self, monkeypatch):
-        """APIキーが設定されている場合、認証が必要であることを確認"""
-        # 既存の環境変数をクリーンアップ
-        for key in list(os.environ.keys()):
-            if key.startswith("YUIGATEWAY_") or key in [
-                "TENANT_ID",
-                "CLIENT_ID",
-                "CLIENT_SECRET",
-                "AZURE_OPENAI_ENDPOINT",
-            ]:
-                monkeypatch.delenv(key, raising=False)
+    def test_api_key_required_when_configured(self, tmp_path):
+        """
+        環境変数でYUIGATEWAY_API_KEYが設定されている場合、
+        APIキーなしのリクエストは403を返すことを検証
 
-        monkeypatch.setenv("YUIGATEWAY_API_KEY", "test-api-key-123")
-        monkeypatch.setenv("TENANT_ID", "test-tenant")
-        monkeypatch.setenv("CLIENT_ID", "test-client")
-        monkeypatch.setenv("CLIENT_SECRET", "test-secret")
-        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
-        monkeypatch.setenv("CONFIG_AUTO_CREATE", "false")
-
-        # モジュールをリロードしてAPIキー設定を反映
-        import importlib
+        Why: pytest の関数スコープで環境変数とSettingsを完全に分離。
+        subprocess を使用してテスト環境を完全に独立させることで、
+        conftest.py の autouse フィクスチャとの競合を回避。
+        """
+        import subprocess
         import sys
 
-        # routesモジュールを削除してリロード
-        if "gateway.routes" in sys.modules:
-            del sys.modules["gateway.routes"]
-        if "gateway.settings" in sys.modules:
-            del sys.modules["gateway.settings"]
-        if "gateway.auth" in sys.modules:
-            del sys.modules["gateway.auth"]
-        if "gateway.azure_proxy" in sys.modules:
-            del sys.modules["gateway.azure_proxy"]
+        # テストスクリプトを作成
+        test_script = tmp_path / "test_api_auth.py"
+        test_script.write_text(
+            """
+import os
+os.environ['YUIGATEWAY_API_KEY'] = 'test-api-key-123'
+os.environ['TENANT_ID'] = 'test-tenant'
+os.environ['CLIENT_ID'] = 'test-client'
+os.environ['CLIENT_SECRET'] = 'test-secret'
+os.environ['AZURE_OPENAI_ENDPOINT'] = 'https://test.openai.azure.com'
+os.environ['CONFIG_AUTO_CREATE'] = 'false'
 
-        from gateway import routes
+from gateway.routes import app
+from fastapi.testclient import TestClient
 
-        client = TestClient(routes.app)
+client = TestClient(app)
+response = client.post(
+    "/v1/chat/completions",
+    json={
+        "model": "gpt-4",
+        "messages": [{"role": "user", "content": "test"}],
+    },
+)
 
-        # APIキーなしでリクエスト
-        with patch("gateway.azure_proxy.get_proxy") as mock_proxy:
-            mock_proxy.return_value.chat_completion = AsyncMock(return_value={})
-            response = client.post(
-                "/v1/chat/completions",
-                json={
-                    "model": "gpt-4",
-                    "messages": [{"role": "user", "content": "test"}],
-                },
-            )
+# 403が返ることを確認
+assert response.status_code == 403, f"Expected 403, got {response.status_code}"
+assert "Invalid or missing API key" in response.json()["detail"]
+print("SUCCESS")
+"""
+        )
 
-        # 403エラーが返ることを確認
-        assert response.status_code == 403
+        # サブプロセスでテストスクリプトを実行
+        result = subprocess.run(
+            [sys.executable, str(test_script)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        # 実行結果を検証
+        assert result.returncode == 0, f"Test failed: {result.stderr}"
+        assert (
+            "SUCCESS" in result.stdout
+        ), f"Test did not complete successfully: {result.stdout}"
 
     def test_api_key_not_required_when_not_configured(self, monkeypatch):
         """APIキーが未設定の場合、認証不要であることを確認"""
