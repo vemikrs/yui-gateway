@@ -54,7 +54,9 @@ class AzureOpenAIProxy:
 
         # モデルサポートチェック
         if not settings.is_model_supported(deployment_name):
-            logger.warning(f"Unsupported model requested: {deployment_name}. Available models: {settings.available_models}")
+            logger.warning(
+                f"Unsupported model requested: {deployment_name}. Available models: {settings.available_models}"
+            )
 
         logger.info(f"Using deployment: {deployment_name}")
 
@@ -97,7 +99,9 @@ class AzureOpenAIProxy:
             logger.error(f"Failed to forward request: {str(e)}")
             raise
 
-    async def chat_completion_stream(self, request_data: dict[str, Any]) -> AsyncGenerator[dict[str, Any], None]:
+    async def chat_completion_stream(
+        self, request_data: dict[str, Any]
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """ストリーミングチャット補完リクエストを Azure OpenAI に転送
 
         Args:
@@ -118,7 +122,8 @@ class AzureOpenAIProxy:
 
         # Azure OpenAI のデプロイメント名を取得（model フィールドから）
         original_model = request_data.get("model", "gpt-4")
-        deployment_name = settings.model_mapping.get(original_model, original_model)
+        # get_model_mappingメソッドを使用
+        deployment_name = settings.get_model_mapping(original_model) or original_model
 
         logger.info(f"Streaming model mapping: {original_model} -> {deployment_name}")
 
@@ -145,11 +150,7 @@ class AzureOpenAIProxy:
         try:
             # ストリーミングリクエストを開始
             async with self.client.stream(
-                "POST",
-                url,
-                json=stream_request_data,
-                headers=headers,
-                params=params
+                "POST", url, json=stream_request_data, headers=headers, params=params
             ) as response:
 
                 # エラーチェック
@@ -171,12 +172,16 @@ class AzureOpenAIProxy:
                                 chunk_data = json.loads(data_str)
 
                                 # OpenAI互換形式に変換してyield
-                                openai_chunk = self._convert_azure_chunk_to_openai(chunk_data)
+                                openai_chunk = self._convert_azure_chunk_to_openai(
+                                    chunk_data
+                                )
                                 if openai_chunk:
                                     yield openai_chunk
 
                             except json.JSONDecodeError as e:
-                                logger.warning(f"Failed to parse streaming chunk: {data_str}, error: {e}")
+                                logger.warning(
+                                    f"Failed to parse streaming chunk: {data_str}, error: {e}"
+                                )
                                 continue
 
         except httpx.HTTPStatusError as e:
@@ -188,7 +193,9 @@ class AzureOpenAIProxy:
             logger.error(f"Failed to process streaming request: {str(e)}")
             raise
 
-    def _convert_azure_chunk_to_openai(self, azure_chunk: dict[str, Any]) -> dict[str, Any] | None:
+    def _convert_azure_chunk_to_openai(
+        self, azure_chunk: dict[str, Any]
+    ) -> dict[str, Any] | None:
         """Azure OpenAIのストリーミングチャンクをOpenAI互換形式に変換
 
         Azure OpenAIとOpenAIのストリーミングフォーマットはほぼ同じだが、

@@ -11,10 +11,19 @@ from unittest.mock import patch, MagicMock, AsyncMock
 from typing import Dict, Any, Optional
 
 from gateway.plugins import (
-    PluginManager, BasePlugin, MiddlewarePlugin, PluginMetadata, PluginLoadError
+    PluginManager,
+    BasePlugin,
+    MiddlewarePlugin,
+    PluginMetadata,
+    PluginType,
+    PluginLoadError,
+    PluginContext,
 )
 from gateway.validation import (
-    ConfigValidator, ValidationResult, ValidationError
+    ConfigValidator,
+    ValidationResult,
+    ValidationError,
+    ValidationSeverity,
 )
 
 
@@ -24,12 +33,13 @@ class TestPluginMetadata:
     def test_plugin_metadata_creation(self):
         """PluginMetadataの作成をテスト"""
         from gateway.plugins import PluginType
+
         metadata = PluginMetadata(
             name="test_plugin",
             version="1.0.0",
             description="Test plugin",
             author="Test Author",
-            plugin_type=PluginType.MIDDLEWARE
+            plugin_type=PluginType.MIDDLEWARE,
         )
 
         assert metadata.name == "test_plugin"
@@ -37,7 +47,7 @@ class TestPluginMetadata:
         assert metadata.description == "Test plugin"
         assert metadata.author == "Test Author"
         assert metadata.dependencies == []
-        assert metadata.priority == 0
+        assert metadata.priority == 500  # PluginPriority.NORMAL.value
 
     def test_plugin_metadata_with_dependencies(self):
         """依存関係を持つPluginMetadataのテスト"""
@@ -46,8 +56,9 @@ class TestPluginMetadata:
             version="1.0.0",
             description="Plugin with dependencies",
             author="Test Author",
+            plugin_type=PluginType.MIDDLEWARE,
             dependencies=["base_plugin", "utils_plugin"],
-            priority=10
+            priority=10,
         )
 
         assert metadata.dependencies == ["base_plugin", "utils_plugin"]
@@ -57,33 +68,52 @@ class TestPluginMetadata:
 class MockPlugin(BasePlugin):
     """テスト用のモックプラグイン"""
 
-    def __init__(self, name: str = "mock_plugin"):
+    def __init__(
+        self,
+        name: str = "mock_plugin",
+        plugin_type: PluginType = PluginType.MIDDLEWARE,
+        config: Optional[Dict[str, Any]] = None,
+    ):
         self.initialized = False
         self.enabled = False
         self.destroyed = False
         self.call_history = []
-
-        super().__init__(PluginMetadata(
+        self._metadata = PluginMetadata(
             name=name,
             version="1.0.0",
             description="Mock plugin for testing",
-            author="Test"
-        ))
+            author="Test",
+            plugin_type=plugin_type,
+        )
+        super().__init__(config)
+
+    @property
+    def metadata(self) -> PluginMetadata:
+        return self._metadata
 
     async def initialize(self) -> bool:
         self.call_history.append("initialize")
         self.initialized = True
+        await super().initialize()
         return True
 
     async def enable(self) -> bool:
         self.call_history.append("enable")
         self.enabled = True
+        await super().enable()
         return True
 
     async def disable(self) -> bool:
         self.call_history.append("disable")
         self.enabled = False
+        await super().disable()
         return True
+
+    async def shutdown(self):
+        """シャットダウン処理"""
+        self.call_history.append("shutdown")
+        self.destroyed = True
+        await super().shutdown()
 
     async def destroy(self) -> bool:
         self.call_history.append("destroy")
@@ -93,29 +123,40 @@ class MockPlugin(BasePlugin):
     async def configure(self, config: Dict[str, Any]) -> bool:
         self.call_history.append(f"configure:{config}")
         return True
+        return True
 
 
 class MockMiddlewarePlugin(MiddlewarePlugin):
     """テスト用のミドルウェアプラグイン"""
 
-    def __init__(self, name: str = "mock_middleware"):
+    def __init__(
+        self, name: str = "mock_middleware", config: Optional[Dict[str, Any]] = None
+    ):
         self.requests_processed = []
         self.responses_processed = []
-
-        super().__init__(PluginMetadata(
+        self._metadata = PluginMetadata(
             name=name,
             version="1.0.0",
             description="Mock middleware plugin",
-            author="Test"
-        ))
+            author="Test",
+            plugin_type=PluginType.MIDDLEWARE,
+        )
+        super().__init__(config)
+
+    @property
+    def metadata(self) -> PluginMetadata:
+        return self._metadata
 
     async def initialize(self) -> bool:
+        await super().initialize()
         return True
 
     async def enable(self) -> bool:
+        await super().enable()
         return True
 
     async def disable(self) -> bool:
+        await super().disable()
         return True
 
     async def destroy(self) -> bool:
@@ -124,21 +165,40 @@ class MockMiddlewarePlugin(MiddlewarePlugin):
     async def configure(self, config: Dict[str, Any]) -> bool:
         return True
 
-    async def process_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """リクエスト前処理"""
-        self.requests_processed.append(request.copy())
+    async def before_request(
+        self, context: PluginContext, request_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """リクエスト前処理（MiddlewarePluginインターフェース実装）"""
+        self.requests_processed.append(request_data.copy())
         # テスト用にheaderを追加
-        request["headers"] = request.get("headers", {})
-        request["headers"]["X-Processed-By"] = self.metadata.name
-        return request
+        request_data["headers"] = request_data.get("headers", {})
+        request_data["headers"]["X-Processed-By"] = self.metadata.name
+        return request_data
 
-    async def process_response(self, response: Dict[str, Any], request: Dict[str, Any]) -> Dict[str, Any]:
-        """レスポンス後処理"""
-        self.responses_processed.append(response.copy())
+    async def after_response(
+        self, context: PluginContext, response_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """レスポンス後処理（MiddlewarePluginインターフェース実装）"""
+        self.responses_processed.append(response_data.copy())
         # テスト用にmetadataを追加
+        response_data["_plugin_metadata"] = {
+            "processed_by": self.metadata.name,
+            "middleware_enabled": True,
+        }
+        return response_data
+
+    async def process_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """後方互換性用ラッパー"""
+        return await self.before_request(PluginContext("test"), request)
+
+    async def process_response(
+        self, response: Dict[str, Any], request: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """後方互換性用ラッパー（request情報をmetadataに含める）"""
+        self.responses_processed.append(response.copy())
         response["_plugin_metadata"] = {
             "processed_by": self.metadata.name,
-            "request_id": request.get("id", "unknown")
+            "request_id": request.get("id", "unknown"),
         }
         return response
 
@@ -216,7 +276,7 @@ class TestMiddlewarePlugin:
             "id": "req-123",
             "method": "POST",
             "url": "/v1/chat/completions",
-            "json": {"model": "gpt-4", "messages": []}
+            "json": {"model": "gpt-4", "messages": []},
         }
 
         # リクエスト処理
@@ -236,10 +296,7 @@ class TestMiddlewarePlugin:
         middleware = MockMiddlewarePlugin("test_middleware")
 
         request = {"id": "req-123"}
-        response = {
-            "id": "resp-456",
-            "choices": [{"message": {"content": "Hello"}}]
-        }
+        response = {"id": "resp-456", "choices": [{"message": {"content": "Hello"}}]}
 
         # レスポンス処理
         processed_response = await middleware.process_response(response, request)
@@ -265,7 +322,7 @@ class TestPluginManager:
         """PluginManagerの初期化テスト"""
         assert len(plugin_manager.plugins) == 0
         assert len(plugin_manager.middleware_plugins) == 0
-        assert not plugin_manager.is_initialized
+        assert not plugin_manager._initialized
 
     @pytest.mark.asyncio
     async def test_register_plugin(self, plugin_manager):
@@ -332,9 +389,9 @@ class TestPluginManager:
         # 初期化
         await plugin_manager.initialize_plugins()
 
-        assert plugin_manager.is_initialized
-        assert plugin1.initialized
-        assert plugin2.initialized
+        assert plugin_manager._initialized
+        assert plugin1.is_initialized
+        assert plugin2.is_initialized
 
     @pytest.mark.asyncio
     async def test_enable_disable_plugins(self, plugin_manager):
@@ -372,7 +429,10 @@ class TestPluginManager:
         # 両方のミドルウェアで処理されることを確認
         assert "headers" in processed_request
         # 最後に処理されたミドルウェアのヘッダーが残る
-        assert processed_request["headers"]["X-Processed-By"] in ["middleware1", "middleware2"]
+        assert processed_request["headers"]["X-Processed-By"] in [
+            "middleware1",
+            "middleware2",
+        ]
 
         # テストレスポンス
         response = {"id": "test-resp", "data": "response"}
@@ -426,7 +486,8 @@ class TestPluginManager:
         assert info is not None
         assert info["name"] == "info_plugin"
         assert info["version"] == "1.0.0"
-        assert "initialized" in info
+        assert "is_initialized" in info
+        assert "is_enabled" in info
         assert "enabled" in info
 
     def test_get_plugin_info_nonexistent(self, plugin_manager):
@@ -460,8 +521,10 @@ class TestConfigValidator:
     def test_validator_initialization(self, validator):
         """ConfigValidatorの初期化テスト"""
         assert len(validator.schemas) > 0
-        assert "provider_config" in validator.schemas
+        assert "azure_openai_provider" in validator.schemas
         assert "endpoint_config" in validator.schemas
+        assert "cache_config" in validator.schemas
+        assert "monitoring_config" in validator.schemas
 
     def test_validate_provider_config_valid(self, validator):
         """有効なプロバイダー設定の検証テスト"""
@@ -469,11 +532,14 @@ class TestConfigValidator:
             "name": "azure",
             "type": "azure_openai",
             "endpoint": "https://test.openai.azure.com/",
+            "tenant_id": "12345678-1234-1234-1234-123456789012",
+            "client_id": "87654321-4321-4321-4321-210987654321",
+            "client_secret": "test_secret",
             "api_version": "2024-10-21",
-            "models": ["gpt-4", "gpt-35-turbo"]
+            "models": ["gpt-4", "gpt-35-turbo"],
         }
 
-        result = validator.validate("provider_config", config)
+        result = validator.validate("azure_openai_provider", config)
         assert result.is_valid
         assert len(result.errors) == 0
 
@@ -484,10 +550,10 @@ class TestConfigValidator:
             "type": "azure_openai",
             # endpointが欠落
             "api_version": "2024-10-21",
-            "models": []  # 空の配列
+            "models": [],  # 空の配列
         }
 
-        result = validator.validate("provider_config", config)
+        result = validator.validate("azure_openai_provider", config)
         assert not result.is_valid
         assert len(result.errors) > 0
 
@@ -500,14 +566,8 @@ class TestConfigValidator:
         config = {
             "path": "/v1/chat/completions",
             "methods": ["POST"],
-            "rate_limit": {
-                "requests_per_minute": 60,
-                "burst_size": 10
-            },
-            "cache": {
-                "enabled": True,
-                "ttl": 3600
-            }
+            "rate_limit": {"requests_per_minute": 60, "burst_size": 10},
+            "cache": {"enabled": True, "ttl": 3600},
         }
 
         result = validator.validate("endpoint_config", config)
@@ -521,7 +581,7 @@ class TestConfigValidator:
             "backend": "memory",
             "default_ttl": 3600,
             "max_size": 1000,
-            "cleanup_interval": 300
+            "cleanup_interval": 300,
         }
 
         result = validator.validate("caching_config", config)
@@ -534,10 +594,7 @@ class TestConfigValidator:
             "enabled": True,
             "metrics_endpoint": "/metrics",
             "export_interval": 60,
-            "alert_thresholds": {
-                "error_rate": 0.05,
-                "response_time_p95": 5.0
-            }
+            "alert_thresholds": {"error_rate": 0.05, "response_time_p95": 5.0},
         }
 
         result = validator.validate("monitoring_config", config)
@@ -560,9 +617,9 @@ class TestConfigValidator:
             "type": "object",
             "properties": {
                 "name": {"type": "string", "minLength": 1},
-                "value": {"type": "number", "minimum": 0}
+                "value": {"type": "number", "minimum": 0},
             },
-            "required": ["name", "value"]
+            "required": ["name", "value"],
         }
 
         # バリデーター登録
@@ -580,20 +637,17 @@ class TestConfigValidator:
 
     def test_validate_with_custom_validator_function(self, validator):
         """カスタムバリデーター関数のテスト"""
-        def custom_validator(data: Dict[str, Any]) -> ValidationResult:
-            errors = []
-            if "special_field" in data and data["special_field"] != "expected_value":
-                errors.append({
-                    "field": "special_field",
-                    "message": "Special field must have expected value",
-                    "value": data["special_field"]
-                })
 
-            return ValidationResult(
-                is_valid=len(errors) == 0,
-                errors=errors,
-                warnings=[]
-            )
+        def custom_validator(data: Dict[str, Any]) -> ValidationResult:
+            result = ValidationResult(valid=True)
+            if "special_field" in data and data["special_field"] != "expected_value":
+                result.add_issue(
+                    ValidationSeverity.ERROR,
+                    "special_field",
+                    "Special field must have expected value",
+                    data["special_field"],
+                )
+            return result
 
         # カスタムバリデーター登録
         validator.register_validator("custom_validator", custom_validator)
@@ -623,10 +677,7 @@ class TestIntegration:
             "name": "test_plugin",
             "version": "1.0.0",
             "enabled": True,
-            "settings": {
-                "param1": "value1",
-                "param2": 42
-            }
+            "settings": {"param1": "value1", "param2": 42},
         }
 
         # カスタムプラグイン設定スキーマ
@@ -636,9 +687,9 @@ class TestIntegration:
                 "name": {"type": "string", "minLength": 1},
                 "version": {"type": "string", "pattern": r"^\d+\.\d+\.\d+$"},
                 "enabled": {"type": "boolean"},
-                "settings": {"type": "object"}
+                "settings": {"type": "object"},
             },
-            "required": ["name", "version", "enabled"]
+            "required": ["name", "version", "enabled"],
         }
 
         validator.register_schema("plugin_config", plugin_schema)
@@ -674,12 +725,9 @@ class TestIntegration:
             "properties": {
                 "request_validation": {"type": "boolean"},
                 "response_validation": {"type": "boolean"},
-                "allowed_models": {
-                    "type": "array",
-                    "items": {"type": "string"}
-                }
+                "allowed_models": {"type": "array", "items": {"type": "string"}},
             },
-            "required": ["request_validation", "response_validation"]
+            "required": ["request_validation", "response_validation"],
         }
 
         validator.register_schema("middleware_config", middleware_schema)
@@ -688,7 +736,7 @@ class TestIntegration:
         middleware_config = {
             "request_validation": True,
             "response_validation": True,
-            "allowed_models": ["gpt-4", "gpt-35-turbo"]
+            "allowed_models": ["gpt-4", "gpt-35-turbo"],
         }
 
         # 設定検証
@@ -707,7 +755,7 @@ class TestIntegration:
         request = {
             "id": "test-req",
             "model": "gpt-4",
-            "messages": [{"role": "user", "content": "Hello"}]
+            "messages": [{"role": "user", "content": "Hello"}],
         }
 
         processed_request = await plugin_manager.process_request(request)

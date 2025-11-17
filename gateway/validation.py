@@ -11,32 +11,40 @@ from pathlib import Path
 from enum import Enum
 
 from pydantic import BaseModel, Field, ValidationError
-from jsonschema import validate, ValidationError as JsonSchemaValidationError, Draft7Validator
+from jsonschema import (
+    validate,
+    ValidationError as JsonSchemaValidationError,
+    Draft7Validator,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class ValidationSeverity(Enum):
     """バリデーションエラーの重要度"""
-    ERROR = "error"      # 設定不正でサービス停止
+
+    ERROR = "error"  # 設定不正でサービス停止
     WARNING = "warning"  # 推奨設定でないが動作可能
-    INFO = "info"        # 情報提示のみ
+    INFO = "info"  # 情報提示のみ
 
 
 class ValidationResult(BaseModel):
     """バリデーション結果"""
+
     valid: bool
     errors: List[Dict[str, Any]] = Field(default_factory=list)
     warnings: List[Dict[str, Any]] = Field(default_factory=list)
     info: List[Dict[str, Any]] = Field(default_factory=list)
 
-    def add_issue(self, severity: ValidationSeverity, field: str, message: str, value: Any = None):
+    def add_issue(
+        self, severity: ValidationSeverity, field: str, message: str, value: Any = None
+    ):
         """バリデーション問題を追加"""
         issue = {
             "field": field,
             "message": message,
             "value": value,
-            "severity": severity.value
+            "severity": severity.value,
         }
 
         if severity == ValidationSeverity.ERROR:
@@ -49,6 +57,11 @@ class ValidationResult(BaseModel):
 
     def has_errors(self) -> bool:
         return len(self.errors) > 0
+
+    @property
+    def is_valid(self) -> bool:
+        """バリデーション成功判定（後方互換性）"""
+        return self.valid
 
     def summary(self) -> str:
         return f"Valid: {self.valid}, Errors: {len(self.errors)}, Warnings: {len(self.warnings)}, Info: {len(self.info)}"
@@ -74,18 +87,35 @@ class ConfigValidator:
                 "enabled": {"type": "boolean"},
                 "endpoint": {
                     "type": "string",
-                    "pattern": r"^https://[a-zA-Z0-9\-]+\.cognitiveservices\.azure\.com/?$"
+                    "pattern": r"^https://[a-zA-Z0-9\-]+\.(cognitiveservices|openai)\.azure\.com/?$",
                 },
-                "api_version": {"type": "string", "pattern": r"^\d{4}-\d{2}-\d{2}(-preview)?$"},
-                "tenant_id": {"type": "string", "pattern": r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
-                "client_id": {"type": "string", "pattern": r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+                "api_version": {
+                    "type": "string",
+                    "pattern": r"^\d{4}-\d{2}-\d{2}(-preview)?$",
+                },
+                "tenant_id": {
+                    "type": "string",
+                    "pattern": r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                },
+                "client_id": {
+                    "type": "string",
+                    "pattern": r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                },
                 "client_secret": {"type": "string", "minLength": 1},
                 "scope": {"type": "string"},
                 "timeout": {"type": "number", "minimum": 1, "maximum": 300},
-                "retry_attempts": {"type": "integer", "minimum": 0, "maximum": 10}
+                "retry_attempts": {"type": "integer", "minimum": 0, "maximum": 10},
+                "models": {"type": "array", "items": {"type": "string"}},
             },
-            "required": ["type", "name", "endpoint", "tenant_id", "client_id", "client_secret"],
-            "additionalProperties": False
+            "required": [
+                "type",
+                "name",
+                "endpoint",
+                "tenant_id",
+                "client_id",
+                "client_secret",
+            ],
+            "additionalProperties": False,
         }
 
         # OpenAI プロバイダースキーマ
@@ -98,10 +128,10 @@ class ConfigValidator:
                 "api_key": {"type": "string", "minLength": 1},
                 "base_url": {"type": "string", "format": "uri"},
                 "timeout": {"type": "number", "minimum": 1, "maximum": 300},
-                "retry_attempts": {"type": "integer", "minimum": 0, "maximum": 10}
+                "retry_attempts": {"type": "integer", "minimum": 0, "maximum": 10},
             },
             "required": ["type", "name", "api_key"],
-            "additionalProperties": False
+            "additionalProperties": False,
         }
 
         # モデルマッピングスキーマ
@@ -111,10 +141,10 @@ class ConfigValidator:
                 "source_model": {"type": "string", "minLength": 1},
                 "target_model": {"type": "string", "minLength": 1},
                 "provider": {"type": "string", "minLength": 1},
-                "description": {"type": "string"}
+                "description": {"type": "string"},
             },
             "required": ["source_model", "target_model", "provider"],
-            "additionalProperties": False
+            "additionalProperties": False,
         }
 
         # エンドポイント設定スキーマ
@@ -123,11 +153,25 @@ class ConfigValidator:
             "properties": {
                 "path": {"type": "string", "pattern": r"^/[a-zA-Z0-9/_\-]*$"},
                 "enabled": {"type": "boolean"},
-                "rate_limit": {"type": "integer", "minimum": 1},
-                "require_auth": {"type": "boolean"}
+                "methods": {"type": "array", "items": {"type": "string"}},
+                "rate_limit": {
+                    "type": "object",
+                    "properties": {
+                        "requests_per_minute": {"type": "integer", "minimum": 1},
+                        "burst_size": {"type": "integer", "minimum": 1},
+                    },
+                },
+                "cache": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {"type": "boolean"},
+                        "ttl": {"type": "integer", "minimum": 1},
+                    },
+                },
+                "require_auth": {"type": "boolean"},
             },
             "required": ["path"],
-            "additionalProperties": False
+            "additionalProperties": False,
         }
 
         # キャッシュ設定スキーマ
@@ -140,10 +184,12 @@ class ConfigValidator:
                 "max_size": {"type": "integer", "minimum": 1},
                 "key_prefix": {"type": "string"},
                 "redis_url": {"type": "string"},
-                "file_path": {"type": "string"}
+                "file_path": {"type": "string"},
             },
-            "required": ["enabled", "backend"]
+            "required": ["enabled", "backend"],
         }
+        # エイリアス（後方互換性）
+        self.schemas["caching_config"] = self.schemas["cache_config"]
 
         # モニタリング設定スキーマ
         self.schemas["monitoring_config"] = {
@@ -152,12 +198,9 @@ class ConfigValidator:
                 "enabled": {"type": "boolean"},
                 "metrics_endpoint": {"type": "string"},
                 "export_interval": {"type": "integer", "minimum": 1},
-                "providers": {
-                    "type": "array",
-                    "items": {"type": "string"}
-                }
+                "providers": {"type": "array", "items": {"type": "string"}},
             },
-            "required": ["enabled"]
+            "required": ["enabled"],
         }
 
     def load_schema(self, name: str, schema: Dict[str, Any]):
@@ -168,7 +211,7 @@ class ConfigValidator:
     def load_schemas_from_file(self, file_path: Union[str, Path]):
         """ファイルからスキーマを読み込み"""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 schemas = json.load(f)
 
             for name, schema in schemas.items():
@@ -182,24 +225,95 @@ class ConfigValidator:
         self.custom_validators[name] = validator_func
         logger.info(f"Registered custom validator: {name}")
 
-    def validate_provider_config(self, provider_config: Dict[str, Any]) -> ValidationResult:
+    def register_schema(self, schema_name: str, schema: Dict[str, Any]):
+        """カスタムスキーマを登録"""
+        self.schemas[schema_name] = schema
+
+    def register_custom_validator(self, schema_name: str, validator: callable):
+        """カスタムバリデーター関数を登録"""
+        self.custom_validators[schema_name] = validator
+
+    def register_validator(self, schema_name: str, validator: callable):
+        """カスタムバリデーター登録（後方互換性エイリアス）"""
+        # スキーマレスバリデーターとして登録（空スキーマ＋カスタムバリデーター）
+        self.schemas[schema_name] = {"type": "object"}
+        self.custom_validators[schema_name] = validator
+
+    def validate(self, schema_name: str, data: Dict[str, Any]) -> ValidationResult:
+        """汎用バリデーションメソッド（テスト用）"""
+        result = ValidationResult(valid=True)
+
+        if schema_name not in self.schemas:
+            result.add_issue(
+                ValidationSeverity.ERROR, "schema", f"Unknown schema: {schema_name}"
+            )
+            return result
+
+        try:
+            validate(data, self.schemas[schema_name])
+        except JsonSchemaValidationError as e:
+            result.add_issue(
+                ValidationSeverity.ERROR,
+                e.path[-1] if e.path else "root",
+                e.message,
+                e.instance,
+            )
+
+        # カスタムバリデーション適用
+        if schema_name in self.custom_validators:
+            try:
+                custom_result = self.custom_validators[schema_name](data)
+                if isinstance(custom_result, ValidationResult):
+                    # カスタムバリデーション結果をマージ
+                    result.errors.extend(custom_result.errors)
+                    result.warnings.extend(custom_result.warnings)
+                    result.info.extend(custom_result.info)
+                    if custom_result.has_errors():
+                        result.valid = False
+                elif not custom_result:
+                    result.add_issue(
+                        ValidationSeverity.ERROR, "custom", "Custom validation failed"
+                    )
+            except Exception as e:
+                result.add_issue(
+                    ValidationSeverity.ERROR,
+                    "custom",
+                    f"Custom validator error: {str(e)}",
+                )
+
+        return result
+
+    def validate_provider_config(
+        self, provider_config: Dict[str, Any]
+    ) -> ValidationResult:
         """プロバイダー設定をバリデーション"""
         result = ValidationResult(valid=True)
 
         provider_type = provider_config.get("type")
         if not provider_type:
-            result.add_issue(ValidationSeverity.ERROR, "type", "Provider type is required")
+            result.add_issue(
+                ValidationSeverity.ERROR, "type", "Provider type is required"
+            )
             return result
 
         schema_name = f"{provider_type}_provider"
         if schema_name not in self.schemas:
-            result.add_issue(ValidationSeverity.WARNING, "type", f"No validation schema found for provider type: {provider_type}")
+            result.add_issue(
+                ValidationSeverity.WARNING,
+                "type",
+                f"No validation schema found for provider type: {provider_type}",
+            )
             return result
 
         try:
             validate(provider_config, self.schemas[schema_name])
         except JsonSchemaValidationError as e:
-            result.add_issue(ValidationSeverity.ERROR, e.path[-1] if e.path else "root", e.message, e.instance)
+            result.add_issue(
+                ValidationSeverity.ERROR,
+                e.path[-1] if e.path else "root",
+                e.message,
+                e.instance,
+            )
 
         # カスタムバリデーション
         if provider_type in self.custom_validators:
@@ -212,11 +326,17 @@ class ConfigValidator:
                     if custom_result.has_errors():
                         result.valid = False
             except Exception as e:
-                result.add_issue(ValidationSeverity.ERROR, "custom_validation", f"Custom validation failed: {str(e)}")
+                result.add_issue(
+                    ValidationSeverity.ERROR,
+                    "custom_validation",
+                    f"Custom validation failed: {str(e)}",
+                )
 
         return result
 
-    def validate_model_mappings(self, mappings: List[Dict[str, Any]]) -> ValidationResult:
+    def validate_model_mappings(
+        self, mappings: List[Dict[str, Any]]
+    ) -> ValidationResult:
         """モデルマッピングをバリデーション"""
         result = ValidationResult(valid=True)
 
@@ -226,19 +346,28 @@ class ConfigValidator:
             try:
                 validate(mapping, self.schemas["model_mapping"])
             except JsonSchemaValidationError as e:
-                result.add_issue(ValidationSeverity.ERROR, f"mappings[{i}].{e.path[-1] if e.path else 'root'}", e.message)
+                result.add_issue(
+                    ValidationSeverity.ERROR,
+                    f"mappings[{i}].{e.path[-1] if e.path else 'root'}",
+                    e.message,
+                )
                 continue
 
             # 重複チェック
             source = mapping.get("source_model")
             if source in source_models:
-                result.add_issue(ValidationSeverity.WARNING, f"mappings[{i}].source_model",
-                               f"Duplicate source model: {source}")
+                result.add_issue(
+                    ValidationSeverity.WARNING,
+                    f"mappings[{i}].source_model",
+                    f"Duplicate source model: {source}",
+                )
             source_models.add(source)
 
         return result
 
-    def validate_endpoints(self, endpoints: Dict[str, Dict[str, Any]]) -> ValidationResult:
+    def validate_endpoints(
+        self, endpoints: Dict[str, Dict[str, Any]]
+    ) -> ValidationResult:
         """エンドポイント設定をバリデーション"""
         result = ValidationResult(valid=True)
 
@@ -247,14 +376,21 @@ class ConfigValidator:
             try:
                 validate(config, self.schemas["endpoint_config"])
             except JsonSchemaValidationError as e:
-                result.add_issue(ValidationSeverity.ERROR, f"endpoints.{name}.{e.path[-1] if e.path else 'root'}", e.message)
+                result.add_issue(
+                    ValidationSeverity.ERROR,
+                    f"endpoints.{name}.{e.path[-1] if e.path else 'root'}",
+                    e.message,
+                )
                 continue
 
             # パス重複チェック
             path = config.get("path")
             if path in paths:
-                result.add_issue(ValidationSeverity.ERROR, f"endpoints.{name}.path",
-                               f"Duplicate endpoint path: {path}")
+                result.add_issue(
+                    ValidationSeverity.ERROR,
+                    f"endpoints.{name}.path",
+                    f"Duplicate endpoint path: {path}",
+                )
             paths.add(path)
 
         return result
@@ -269,8 +405,18 @@ class ConfigValidator:
             provider_result = self.validate_provider_config(provider_config)
             if provider_result.has_errors():
                 result.valid = False
-            result.errors.extend([{**error, "field": f"providers.{name}.{error['field']}"} for error in provider_result.errors])
-            result.warnings.extend([{**warning, "field": f"providers.{name}.{warning['field']}"} for warning in provider_result.warnings])
+            result.errors.extend(
+                [
+                    {**error, "field": f"providers.{name}.{error['field']}"}
+                    for error in provider_result.errors
+                ]
+            )
+            result.warnings.extend(
+                [
+                    {**warning, "field": f"providers.{name}.{warning['field']}"}
+                    for warning in provider_result.warnings
+                ]
+            )
 
         # モデルマッピング
         mappings = config.get("model_mappings", [])
@@ -293,14 +439,22 @@ class ConfigValidator:
             try:
                 validate(config["cache"], self.schemas["cache_config"])
             except JsonSchemaValidationError as e:
-                result.add_issue(ValidationSeverity.ERROR, f"cache.{e.path[-1] if e.path else 'root'}", e.message)
+                result.add_issue(
+                    ValidationSeverity.ERROR,
+                    f"cache.{e.path[-1] if e.path else 'root'}",
+                    e.message,
+                )
 
         # モニタリング設定
         if "monitoring" in config:
             try:
                 validate(config["monitoring"], self.schemas["monitoring_config"])
             except JsonSchemaValidationError as e:
-                result.add_issue(ValidationSeverity.ERROR, f"monitoring.{e.path[-1] if e.path else 'root'}", e.message)
+                result.add_issue(
+                    ValidationSeverity.ERROR,
+                    f"monitoring.{e.path[-1] if e.path else 'root'}",
+                    e.message,
+                )
 
         return result
 
@@ -314,16 +468,22 @@ def validate_azure_openai_config(config: Dict[str, Any]) -> ValidationResult:
     endpoint = config.get("endpoint", "")
     if "cognitiveservices.azure.com" in endpoint:
         if not endpoint.startswith("https://"):
-            result.add_issue(ValidationSeverity.WARNING, "endpoint",
-                           "Azure OpenAI endpoint should use HTTPS")
+            result.add_issue(
+                ValidationSeverity.WARNING,
+                "endpoint",
+                "Azure OpenAI endpoint should use HTTPS",
+            )
 
     # APIバージョンの推奨チェック
     api_version = config.get("api_version", "")
     if api_version and "preview" not in api_version:
         # 古いAPIバージョンの警告
         if api_version < "2024-06-01":
-            result.add_issue(ValidationSeverity.INFO, "api_version",
-                           f"Consider updating to newer API version (current: {api_version})")
+            result.add_issue(
+                ValidationSeverity.INFO,
+                "api_version",
+                f"Consider updating to newer API version (current: {api_version})",
+            )
 
     return result
 
