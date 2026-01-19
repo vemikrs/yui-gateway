@@ -114,20 +114,19 @@ isodate = ">=0.6.1,<1.0.0"
 
 [[package]]
 name = "azure-mgmt-cognitiveservices"
-version = "13.7.0"
-description = "Microsoft Azure Cognitive Services Management Client Library for Python"
+version = "14.1.0"
+description = "Microsoft Azure Cognitiveservices Management Client Library for Python"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "azure_mgmt_cognitiveservices-13.7.0-py3-none-any.whl", hash = "sha256:9683c436781b8294fe85410da4d22323128c3d68bc141196addbdf07b048dfb4"},
-    {file = "azure_mgmt_cognitiveservices-13.7.0.tar.gz", hash = "sha256:48a5a44c15c6768bad238011aaac83a806ceb8ace1b51b8043e35b39a9167a19"},
+    {file = "azure_mgmt_cognitiveservices-14.1.0-py3-none-any.whl", hash = "sha256:3c0eecc00d183842a11d754f4f5c3328ff86f2d6c0a2b81b28dd7e073680258e"},
+    {file = "azure_mgmt_cognitiveservices-14.1.0.tar.gz", hash = "sha256:915191374d0adb443863c20aaea2c9f3b9d558a849ac2b78f152249262fdcaf8"},
 ]
 
 [package.dependencies]
-azure-common = ">=1.1"
-azure-mgmt-core = ">=1.5.0"
-isodate = ">=0.6.1"
+azure-mgmt-core = ">=1.6.0"
+msrest = ">=0.7.1"
 typing-extensions = ">=4.6.0"
 
 [[package]]
@@ -930,6 +929,28 @@ msal = ">=1.29,<2"
 portalocker = ["portalocker (>=1.4,<4)"]
 
 [[package]]
+name = "msrest"
+version = "0.7.1"
+description = "AutoRest swagger generator Python client runtime."
+optional = false
+python-versions = ">=3.6"
+groups = ["main"]
+files = [
+    {file = "msrest-0.7.1-py3-none-any.whl", hash = "sha256:21120a810e1233e5e6cc7fe40b474eeb4ec6f757a15d7cf86702c369f9567c32"},
+    {file = "msrest-0.7.1.zip", hash = "sha256:6e7661f46f3afd88b75667b7187a92829924446c7ea1d169be8c4bb7eeb788b9"},
+]
+
+[package.dependencies]
+azure-core = ">=1.24.0"
+certifi = ">=2017.4.17"
+isodate = ">=0.6.0"
+requests = ">=2.16,<3.0"
+requests-oauthlib = ">=0.5.0"
+
+[package.extras]
+async = ["aiodns ; python_version >= \"3.5\"", "aiohttp (>=3.0) ; python_version >= \"3.5\""]
+
+[[package]]
 name = "mypy-extensions"
 version = "1.1.0"
 description = "Type system extensions for programs checked with the mypy type checker."
@@ -940,6 +961,23 @@ files = [
     {file = "mypy_extensions-1.1.0-py3-none-any.whl", hash = "sha256:1be4cccdb0f2482337c4743e60421de3a356cd97508abadd57d47403e94f5505"},
     {file = "mypy_extensions-1.1.0.tar.gz", hash = "sha256:52e68efc3284861e772bbcd66823fde5ae21fd2fdb51c62a211403730b916558"},
 ]
+
+[[package]]
+name = "oauthlib"
+version = "3.3.1"
+description = "A generic, spec-compliant, thorough implementation of the OAuth request-signing logic"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "oauthlib-3.3.1-py3-none-any.whl", hash = "sha256:88119c938d2b8fb88561af5f6ee0eec8cc8d552b7bb1f712743136eb7523b7a1"},
+    {file = "oauthlib-3.3.1.tar.gz", hash = "sha256:0f0f8aa759826a193cf66c12ea1af1637f87b9b4622d46e866952bb022e538c9"},
+]
+
+[package.extras]
+rsa = ["cryptography (>=3.0.0)"]
+signals = ["blinker (>=1.4.0)"]
+signedtoken = ["cryptography (>=3.0.0)", "pyjwt (>=2.0.0,<3)"]
 
 [[package]]
 name = "packaging"
@@ -1464,6 +1502,25 @@ urllib3 = ">=1.21.1,<3"
 [package.extras]
 socks = ["PySocks (>=1.5.6,!=1.5.7)"]
 use-chardet-on-py3 = ["chardet (>=3.0.2,<6)"]
+
+[[package]]
+name = "requests-oauthlib"
+version = "2.0.0"
+description = "OAuthlib authentication support for Requests."
+optional = false
+python-versions = ">=3.4"
+groups = ["main"]
+files = [
+    {file = "requests-oauthlib-2.0.0.tar.gz", hash = "sha256:b3dffaebd884d8cd778494369603a9e7b58d29111bf6b41bdc2dcd87203af4e9"},
+    {file = "requests_oauthlib-2.0.0-py2.py3-none-any.whl", hash = "sha256:7dd8a5c40426b779b0868c404bdef9768deccf22749cde15852df527e6269b36"},
+]
+
+[package.dependencies]
+oauthlib = ">=3.0.0"
+requests = ">=2.0.0"
+
+[package.extras]
+rsa = ["oauthlib[signedtoken] (>=3.0.0)"]
 
 [[package]]
 name = "rpds-py"
@@ -2022,4 +2079,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "a9b9b2e0b2f41ba9bbac1bb1c7f98e2bbde907374769f947c98997f2cf6efac9"
+content-hash = "2a01e0cf62b43f5b481b12b8f767ae1f21208a396d6dd7f70cd14771a8a4e5b5"
