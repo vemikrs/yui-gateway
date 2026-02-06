@@ -46,7 +46,7 @@ from azure.identity import (
 from azure.mgmt.authorization import AuthorizationManagementClient
 from azure.mgmt.authorization.models import RoleAssignmentCreateParameters
 from azure.mgmt.cognitiveservices import CognitiveServicesManagementClient
-from azure.mgmt.resource.subscriptions import SubscriptionClient
+from azure.mgmt.subscription import SubscriptionClient
 
 
 ROOT = Path(__file__).resolve().parent.parent
