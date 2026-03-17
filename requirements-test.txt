@@ -3,7 +3,7 @@
 
 # Core dependencies
 fastapi>=0.104.0,<0.105.0
-uvicorn[standard]>=0.24.0,<0.42.0
+uvicorn[standard]>=0.24.0,<0.43.0
 msal>=1.25.0,<2.0.0
 httpx>=0.25.0,<0.26.0
 pydantic-settings>=2.0.0,<3.0.0
